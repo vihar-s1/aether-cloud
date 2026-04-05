@@ -1,0 +1,52 @@
+# Gradle
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# IDE
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment & Secrets
+.env
+.env.local
+*.properties.bak
+*.jks
+*.p12
+*.pem
+
+# Package manager
+lib/
+
+# Kotlin
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Crash reports
+hs_err_pid*
+replay_pid*
+
+# JProfiler, YourKit, etc.
+*.jps
+.yjp/
