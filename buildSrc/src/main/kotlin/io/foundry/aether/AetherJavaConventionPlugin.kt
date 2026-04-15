@@ -1,5 +1,6 @@
 package io.foundry.aether
 
+import com.diffplug.gradle.spotless.SpotlessExtension
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.plugins.JavaPluginExtension
@@ -13,6 +14,9 @@ class AetherJavaConventionPlugin : Plugin<Project> {
     override fun apply(project: Project) {
         // Apply Java library plugin
         project.pluginManager.apply("java-library")
+
+        // Apply Spotless
+        project.pluginManager.apply("com.diffplug.spotless")
 
         // Configure repository
         project.repositories {
@@ -45,6 +49,29 @@ class AetherJavaConventionPlugin : Plugin<Project> {
             add("testRuntimeOnly", AetherLibs.JUNIT_PLATFORM_LAUNCHER)
             add("testImplementation", AetherLibs.MOCKITO_CORE)
             add("testImplementation", AetherLibs.ASSERTJ_CORE)
+        }
+
+        // Configure Spotless — only check files changed since HEAD
+        project.extensions.configure(SpotlessExtension::class.java) {
+            ratchetFrom("HEAD")
+            java {
+                licenseHeader(
+                    """/*
+ * Copyright ${'$'}YEAR Foundry
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+"""
+                )
+                palantirJavaFormat("2.38.0")
+                removeUnusedImports()
+                trimTrailingWhitespace()
+                endWithNewline()
+            }
+            kotlinGradle {
+                trimTrailingWhitespace()
+                endWithNewline()
+            }
         }
     }
 }
