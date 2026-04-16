@@ -6,4 +6,5 @@ description = "In-memory provider implementation for Aether"
 
 dependencies {
     api(project(":aether-core"))
+    testImplementation(testFixtures(project(":aether-core")))
 }
