@@ -6,16 +6,15 @@
 package io.foundry.aether.core.compute;
 
 import io.foundry.aether.core.CloudService;
-import io.foundry.aether.core.exception.CloudException;
 import java.util.List;
 
 public interface ComputeEngine extends CloudService {
 
-    InstanceInfo createInstance(InstanceConfig config) throws CloudException;
+    InstanceInfo createInstance(InstanceConfig config);
 
-    void terminateInstance(String instanceId) throws CloudException;
+    void terminateInstance(String instanceId);
 
-    InstanceInfo getInstance(String instanceId) throws CloudException;
+    InstanceInfo getInstance(String instanceId);
 
-    List<InstanceInfo> listInstances() throws CloudException;
+    List<InstanceInfo> listInstances();
 }

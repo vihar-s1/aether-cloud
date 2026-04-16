@@ -11,7 +11,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.foundry.aether.core.CloudProvider;
-import io.foundry.aether.core.exception.CloudException;
 import io.foundry.aether.core.exception.InvalidConfigurationException;
 import io.foundry.aether.core.storage.BlobStore;
 import java.util.concurrent.CountDownLatch;
@@ -38,7 +37,7 @@ class DefaultProviderRegistryTest {
     }
 
     @Test
-    void registerAndLookup() throws CloudException {
+    void registerAndLookup() {
         CloudProvider aws = mockProvider("aws");
         registry.register(aws);
 
@@ -47,7 +46,7 @@ class DefaultProviderRegistryTest {
     }
 
     @Test
-    void duplicateRegistration_throws() throws CloudException {
+    void duplicateRegistration_throws() {
         registry.register(mockProvider("aws"));
         assertThatThrownBy(() -> registry.register(mockProvider("aws")))
                 .isInstanceOf(InvalidConfigurationException.class)
@@ -60,7 +59,7 @@ class DefaultProviderRegistryTest {
     }
 
     @Test
-    void registerAndGetService() throws CloudException {
+    void registerAndGetService() {
         registry.register(mockProvider("aws"));
         BlobStore blobStore = mock(BlobStore.class);
 

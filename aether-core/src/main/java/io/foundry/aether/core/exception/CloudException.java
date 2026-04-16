@@ -5,7 +5,7 @@
 
 package io.foundry.aether.core.exception;
 
-public abstract sealed class CloudException extends Exception
+public abstract sealed class CloudException extends RuntimeException
         permits AuthenticationException,
                 ResourceNotFoundException,
                 QuotaExceededException,

@@ -6,18 +6,17 @@
 package io.foundry.aether.core.secrets;
 
 import io.foundry.aether.core.CloudService;
-import io.foundry.aether.core.exception.CloudException;
 import java.util.List;
 
 public interface SecretManager extends CloudService {
 
-    SecretValue getSecret(String secretId) throws CloudException;
+    SecretValue getSecret(String secretId);
 
-    SecretMetadata putSecret(String secretId, String value) throws CloudException;
+    SecretMetadata putSecret(String secretId, String value);
 
-    SecretValue rotate(String secretId) throws CloudException;
+    SecretValue rotate(String secretId);
 
-    void deleteSecret(String secretId) throws CloudException;
+    void deleteSecret(String secretId);
 
-    List<SecretMetadata> listSecrets() throws CloudException;
+    List<SecretMetadata> listSecrets();
 }

@@ -7,7 +7,6 @@ package io.foundry.aether.core.registry;
 
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.CloudService;
-import io.foundry.aether.core.exception.CloudException;
 import io.foundry.aether.core.exception.InvalidConfigurationException;
 import java.util.Collection;
 import java.util.Optional;
@@ -21,7 +20,7 @@ public final class DefaultProviderRegistry implements ProviderRegistry {
     private final ConcurrentMap<String, ConcurrentMap<Class<?>, CloudService>> services = new ConcurrentHashMap<>();
 
     @Override
-    public void register(CloudProvider provider) throws CloudException {
+    public void register(CloudProvider provider) {
         Validate.notNull(provider, "provider must not be null");
         Validate.notBlank(provider.name(), "provider name must not be blank");
 
@@ -44,8 +43,7 @@ public final class DefaultProviderRegistry implements ProviderRegistry {
     }
 
     @Override
-    public <S extends CloudService> void registerService(String providerName, Class<S> serviceType, S service)
-            throws CloudException {
+    public <S extends CloudService> void registerService(String providerName, Class<S> serviceType, S service) {
         Validate.notBlank(providerName, "provider name must not be blank");
         Validate.notNull(serviceType, "service type must not be null");
         Validate.notNull(service, "service must not be null");

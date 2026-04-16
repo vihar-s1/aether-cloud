@@ -6,20 +6,19 @@
 package io.foundry.aether.core.storage;
 
 import io.foundry.aether.core.CloudService;
-import io.foundry.aether.core.exception.CloudException;
 import java.util.List;
 
 public interface BlobStore extends CloudService {
 
-    BlobMetadata upload(UploadBlobRequest request) throws CloudException;
+    BlobMetadata upload(UploadBlobRequest request);
 
-    BlobContent download(BlobRef ref) throws CloudException;
+    BlobContent download(BlobRef ref);
 
-    List<BlobMetadata> list(ListBlobsRequest request) throws CloudException;
+    List<BlobMetadata> list(ListBlobsRequest request);
 
-    void delete(BlobRef ref) throws CloudException;
+    void delete(BlobRef ref);
 
-    boolean exists(BlobRef ref) throws CloudException;
+    boolean exists(BlobRef ref);
 
-    BlobMetadata getMetadata(BlobRef ref) throws CloudException;
+    BlobMetadata getMetadata(BlobRef ref);
 }
