@@ -8,6 +8,4 @@ pluginManagement {
 }
 
 include("aether-core")
-include("aether-aws")
-include("aether-gcp")
-include("aether-azure")
+include("aether-inmemory")

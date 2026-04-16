@@ -15,4 +15,9 @@ public record InstanceInfo(
         String publicIp,
         String privateIp,
         Instant launchTime,
-        Map<String, String> tags) {}
+        Map<String, String> tags) {
+
+    public InstanceInfo withState(InstanceState newState) {
+        return new InstanceInfo(instanceId, name, newState, publicIp, privateIp, launchTime, tags);
+    }
+}
