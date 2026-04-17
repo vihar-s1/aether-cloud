@@ -18,6 +18,8 @@ public abstract class AbstractSecretManager<T extends CloudProvider> implements 
         }
     }
 
+    public record VersionInfo(String versionId, long createdAtMs) {}
+
     protected T cloudProvider;
 
     protected AbstractSecretManager(T cloudProvider) {
@@ -28,7 +30,7 @@ public abstract class AbstractSecretManager<T extends CloudProvider> implements 
     public SecretValue getSecret(String secretId) {
         SecretEntry entry = readEntry(secretId);
         if (entry == null) {
-            throw new ResourceNotFoundException(cloudProvider.name(), "getSecret", secretId, "Secret not found");
+            throw new ResourceNotFoundException(cloudProvider.name(), "getSecret", SECRET, secretId);
         }
         return new SecretValue(
                 secretId,
@@ -38,15 +40,23 @@ public abstract class AbstractSecretManager<T extends CloudProvider> implements 
     }
 
     @Override
-    public SecretMetadata putSecret(String secretId, String value) {
-        SecretEntry entry = readEntry(secretId);
-        String versionId =
-                entry != null ? String.valueOf(Integer.parseInt(entry.metadata().versionId()) + 1) : "1";
-        long createdAtMs = entry != null ? entry.metadata().createdAtMs() : System.currentTimeMillis();
-        long rotatedAtMs = entry != null ? entry.metadata().lastRotatedAtMs() : 0L;
-        var metadata = new SecretMetadata(secretId, secretId, null, versionId, createdAtMs, rotatedAtMs);
-        upsertEntry(secretId, new SecretEntry(value, metadata));
-        return metadata;
+    public SecretMetadata createSecret(String secretId, String value) {
+        SecretMetadata existingMetadata = findSecretMetadata(secretId);
+        if (existingMetadata != null) {
+            throw new IllegalStateException("Secret already exists: " + secretId);
+        }
+        VersionInfo versionInfo = createEntry(secretId, value);
+        return new SecretMetadata(secretId, secretId, null, versionInfo.versionId(), versionInfo.createdAtMs(), 0L);
+    }
+
+    @Override
+    public SecretMetadata updateSecret(String secretId, String value) {
+        SecretMetadata existingMetadata = findSecretMetadata(secretId);
+        if (existingMetadata == null) {
+            throw new ResourceNotFoundException(cloudProvider.name(), "updateSecret", SECRET, secretId);
+        }
+        VersionInfo versionInfo = updateEntry(secretId, value);
+        return existingMetadata.updateVersion(versionInfo.versionId());
     }
 
     @Override
@@ -55,13 +65,12 @@ public abstract class AbstractSecretManager<T extends CloudProvider> implements 
         if (entry == null) {
             throw new ResourceNotFoundException(cloudProvider.name(), "rotate", secretId, "Secret not found");
         }
-        String newVersionId = String.valueOf(Integer.parseInt(entry.metadata().versionId()) + 1);
-        long nowMs = System.currentTimeMillis();
-        var metadata = new SecretMetadata(
-                secretId, secretId, null, newVersionId, entry.metadata().createdAtMs(), nowMs);
-        upsertEntry(secretId, new SecretEntry(entry.value(), metadata));
+        VersionInfo versionInfo = updateEntry(secretId, entry.value());
         return new SecretValue(
-                secretId, entry.value(), newVersionId, entry.metadata().createdAtMs());
+                secretId,
+                entry.value(),
+                versionInfo.versionId(),
+                entry.metadata().createdAtMs());
     }
 
     @Override
@@ -85,7 +94,18 @@ public abstract class AbstractSecretManager<T extends CloudProvider> implements 
 
     protected abstract Collection<SecretMetadata> listEntries();
 
-    protected abstract void upsertEntry(String secretId, SecretEntry entry);
+    protected abstract SecretMetadata findSecretMetadata(String secretId);
+
+    /**
+     * Create secret entry. Returns version info (versionId and createdAt timestamp) assigned by
+     * the provider.
+     */
+    protected abstract VersionInfo createEntry(String secretId, String value);
+
+    /**
+     * Update secret entry. Returns version info assigned by the provider.
+     */
+    protected abstract VersionInfo updateEntry(String secretId, String value);
 
     protected abstract SecretEntry deleteEntry(String secretId);
 }

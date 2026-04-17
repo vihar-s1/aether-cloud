@@ -10,5 +10,6 @@ public enum InstanceState {
     RUNNING,
     STOPPING,
     STOPPED,
-    TERMINATED
+    TERMINATED,
+    UNKNOWN
 }
