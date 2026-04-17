@@ -5,7 +5,6 @@
 
 package io.foundry.aether.core.storage;
 
-import java.time.Instant;
 import java.util.Map;
 
 public record BlobMetadata(
@@ -13,5 +12,5 @@ public record BlobMetadata(
         String key,
         long sizeBytes,
         String contentType,
-        Instant lastModified,
+        long lastModifiedMs,
         Map<String, String> metadata) {}

@@ -22,7 +22,6 @@ import io.foundry.aether.nfs.NFSCloudProvider;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.*;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -45,7 +44,12 @@ public class NFSBlobStore implements BlobStore {
             Path path = FileUtils.ensurePathExists(provider.basePath(), request.bucket(), request.key());
             Files.copy(inputStream, path, StandardCopyOption.REPLACE_EXISTING);
             return new BlobMetadata(
-                    request.bucket(), request.key(), Files.size(path), request.contentType(), Instant.now(), Map.of());
+                    request.bucket(),
+                    request.key(),
+                    Files.size(path),
+                    request.contentType(),
+                    System.currentTimeMillis(),
+                    Map.of());
         } catch (IOException e) {
             throw wrapIOException(e, "upload", new BlobRef(request.bucket(), request.key()));
         }
@@ -59,7 +63,12 @@ public class NFSBlobStore implements BlobStore {
                 throw new ResourceNotFoundException("nfs", "download", BlobStore.BLOB, ref.getId());
             }
             BlobMetadata metadata = new BlobMetadata(
-                    ref.bucket(), ref.key(), Files.size(path), Files.probeContentType(path), Instant.now(), Map.of());
+                    ref.bucket(),
+                    ref.key(),
+                    Files.size(path),
+                    Files.probeContentType(path),
+                    System.currentTimeMillis(),
+                    Map.of());
             return new BlobContent(Files.newInputStream(path), metadata);
         } catch (IOException e) {
             throw wrapIOException(e, "download", ref);
@@ -81,7 +90,12 @@ public class NFSBlobStore implements BlobStore {
                 String key = path.relativize(p).toString();
                 try {
                     return new BlobMetadata(
-                            request.bucket(), key, Files.size(p), Files.probeContentType(p), Instant.now(), Map.of());
+                            request.bucket(),
+                            key,
+                            Files.size(p),
+                            Files.probeContentType(p),
+                            System.currentTimeMillis(),
+                            Map.of());
                 } catch (IOException e) {
                     throw wrapIOException(e, "list", new BlobRef(request.bucket(), key));
                 }
@@ -117,7 +131,12 @@ public class NFSBlobStore implements BlobStore {
                 throw new ResourceNotFoundException("nfs", "getMetadata", BlobStore.BLOB, ref.getId());
             }
             return new BlobMetadata(
-                    ref.bucket(), ref.key(), Files.size(path), Files.probeContentType(path), Instant.now(), Map.of());
+                    ref.bucket(),
+                    ref.key(),
+                    Files.size(path),
+                    Files.probeContentType(path),
+                    System.currentTimeMillis(),
+                    Map.of());
         } catch (IOException e) {
             throw wrapIOException(e, "getMetadata", ref);
         }

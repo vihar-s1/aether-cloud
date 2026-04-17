@@ -11,7 +11,6 @@ import io.foundry.aether.core.compute.InstanceConfig;
 import io.foundry.aether.core.compute.InstanceInfo;
 import io.foundry.aether.core.compute.InstanceState;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,7 +38,7 @@ public class InMemoryComputeEngine implements ComputeEngine {
                 InstanceState.RUNNING,
                 null,
                 "10.0.0." + (instances.size() + 1),
-                Instant.now(),
+                System.currentTimeMillis(),
                 config.tags());
         instances.put(instanceId, info);
         return info;

@@ -5,7 +5,6 @@
 
 package io.foundry.aether.core.compute;
 
-import java.time.Instant;
 import java.util.Map;
 
 public record InstanceInfo(
@@ -14,10 +13,10 @@ public record InstanceInfo(
         InstanceState state,
         String publicIp,
         String privateIp,
-        Instant launchTime,
+        long launchTimeMs,
         Map<String, String> tags) {
 
     public InstanceInfo withState(InstanceState newState) {
-        return new InstanceInfo(instanceId, name, newState, publicIp, privateIp, launchTime, tags);
+        return new InstanceInfo(instanceId, name, newState, publicIp, privateIp, launchTimeMs, tags);
     }
 }

@@ -17,7 +17,6 @@ import io.foundry.aether.core.storage.UploadBlobRequest;
 import io.foundry.aether.inmemory.InMemoryCloudProvider;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,7 +42,12 @@ public class InMemoryBlobStore implements BlobStore {
         try {
             byte[] bytes = request.data().readAllBytes();
             var metadata = new BlobMetadata(
-                    request.bucket(), request.key(), bytes.length, request.contentType(), Instant.now(), Map.of());
+                    request.bucket(),
+                    request.key(),
+                    bytes.length,
+                    request.contentType(),
+                    System.currentTimeMillis(),
+                    Map.of());
             store.put(new BlobRef(request.bucket(), request.key()), new StoredBlob(bytes, metadata));
             return metadata;
         } catch (IOException e) {
