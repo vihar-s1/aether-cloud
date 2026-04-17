@@ -30,13 +30,14 @@ public final class NSFUtils {
 
     public static CloudException wrapIOException(IOException e, String operation, BlobRef ref) {
         return switch (e) {
-            case AccessDeniedException ade -> new AuthenticationException("nfs", operation, BlobStore.BLOB, ade);
+            case AccessDeniedException ade -> new AuthenticationException(
+                    NFSCloudProvider.PROVIDER_NAME, operation, BlobStore.BLOB, ade);
             case NoSuchFileException nsfe -> new ResourceNotFoundException(
-                    "nfs", operation, BlobStore.BLOB, ref.getId(), nsfe);
+                    NFSCloudProvider.PROVIDER_NAME, operation, BlobStore.BLOB, ref.getId(), nsfe);
             case FileSystemException fse -> new ProviderUnavailableException(
-                    "nfs", operation, "Filesystem error: " + fse.getMessage(), fse);
+                    NFSCloudProvider.PROVIDER_NAME, operation, "Filesystem error: " + fse.getMessage(), fse);
             default -> new GenericCloudException(
-                    "nfs", operation, null, "I/O error: " + ExceptionUtils.getRootCause(e), e);
+                    NFSCloudProvider.PROVIDER_NAME, operation, null, "I/O error: " + ExceptionUtils.getRootCause(e), e);
         };
     }
 }

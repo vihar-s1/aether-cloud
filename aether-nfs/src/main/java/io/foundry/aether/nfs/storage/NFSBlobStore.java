@@ -12,12 +12,7 @@ import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.exception.*;
 import io.foundry.aether.core.internal.CollectionUtils;
 import io.foundry.aether.core.internal.FileUtils;
-import io.foundry.aether.core.storage.BlobContent;
-import io.foundry.aether.core.storage.BlobMetadata;
-import io.foundry.aether.core.storage.BlobRef;
-import io.foundry.aether.core.storage.BlobStore;
-import io.foundry.aether.core.storage.ListBlobsRequest;
-import io.foundry.aether.core.storage.UploadBlobRequest;
+import io.foundry.aether.core.storage.*;
 import io.foundry.aether.nfs.NFSCloudProvider;
 import java.io.IOException;
 import java.io.InputStream;
@@ -60,7 +55,7 @@ public class NFSBlobStore implements BlobStore {
         try {
             Path path = toPath(provider, ref);
             if (!Files.exists(path)) {
-                throw new ResourceNotFoundException("nfs", "download", BlobStore.BLOB, ref.getId());
+                throw new ResourceNotFoundException(provider.name(), "download", BlobStore.BLOB, ref.getId());
             }
             BlobMetadata metadata = new BlobMetadata(
                     ref.bucket(),
@@ -76,17 +71,17 @@ public class NFSBlobStore implements BlobStore {
     }
 
     @Override
-    public List<BlobMetadata> list(ListBlobsRequest request) {
+    public ListBlobsResponse list(ListBlobsRequest request) {
         Path path = Path.of(provider.basePath()).resolve(request.bucket());
         if (!Files.exists(path)) {
-            return List.of();
+            return ListBlobsResponse.empty();
         }
         try {
             List<Path> files = FileUtils.filterFiles(path, p -> {
                 String relativePath = path.relativize(p).toString();
                 return relativePath.startsWith(request.prefix());
             });
-            return CollectionUtils.transformList(files, p -> {
+            List<BlobMetadata> blobs = CollectionUtils.transformList(files, p -> {
                 String key = path.relativize(p).toString();
                 try {
                     return new BlobMetadata(
@@ -100,19 +95,25 @@ public class NFSBlobStore implements BlobStore {
                     throw wrapIOException(e, "list", new BlobRef(request.bucket(), key));
                 }
             });
+            return new ListBlobsResponse(blobs, null, false);
         } catch (IOException e) {
             throw wrapIOException(e, "list", new BlobRef(request.bucket(), request.prefix()));
         }
     }
 
     @Override
-    public void delete(BlobRef ref) {
+    public BlobMetadata delete(BlobRef ref) {
         try {
             Path path = toPath(provider, ref);
             if (!Files.exists(path)) {
-                throw new ResourceNotFoundException("nfs", "delete", BlobStore.BLOB, ref.getId());
+                return null;
             }
+            BlobMetadata blob = new BlobMetadata(
+                    ref.bucket(), ref.key(),
+                    Files.size(path), Files.probeContentType(path),
+                    System.currentTimeMillis(), Map.of());
             Files.delete(path);
+            return blob;
         } catch (IOException e) {
             throw wrapIOException(e, "delete", ref);
         }
@@ -128,7 +129,7 @@ public class NFSBlobStore implements BlobStore {
         try {
             Path path = toPath(provider, ref);
             if (!Files.exists(path)) {
-                throw new ResourceNotFoundException("nfs", "getMetadata", BlobStore.BLOB, ref.getId());
+                throw new ResourceNotFoundException(provider.name(), "getMetadata", BlobStore.BLOB, ref.getId());
             }
             return new BlobMetadata(
                     ref.bucket(),

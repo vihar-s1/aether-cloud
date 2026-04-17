@@ -12,11 +12,12 @@ import io.foundry.aether.core.exception.ProviderUnavailableException;
 
 public class InMemoryCloudProvider implements CloudProvider {
 
+    public static final String PROVIDER_NAME = "inmemory";
     private volatile ProviderStatus status = ProviderStatus.INITIALIZED;
 
     @Override
     public String name() {
-        return "inmemory";
+        return PROVIDER_NAME;
     }
 
     @Override
@@ -27,10 +28,10 @@ public class InMemoryCloudProvider implements CloudProvider {
     @Override
     public void initialize() {
         if (status == ProviderStatus.SHUTDOWN) {
-            throw new InvalidConfigurationException("inmemory", "initialize", "Provider has been shut down");
+            throw new InvalidConfigurationException(PROVIDER_NAME, "initialize", "Provider has been shut down");
         }
         if (status == ProviderStatus.RUNNING) {
-            throw new InvalidConfigurationException("inmemory", "initialize", "Provider is already running");
+            throw new InvalidConfigurationException(PROVIDER_NAME, "initialize", "Provider is already running");
         }
         status = ProviderStatus.RUNNING;
     }
@@ -38,7 +39,7 @@ public class InMemoryCloudProvider implements CloudProvider {
     @Override
     public void shutdown() {
         if (status == ProviderStatus.SHUTDOWN) {
-            throw new ProviderUnavailableException("inmemory", "shutdown", "Provider is already shut down");
+            throw new ProviderUnavailableException(PROVIDER_NAME, "shutdown", "Provider is already shut down");
         }
         status = ProviderStatus.SHUTDOWN;
     }

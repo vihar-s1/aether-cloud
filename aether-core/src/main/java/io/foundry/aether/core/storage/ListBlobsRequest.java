@@ -5,4 +5,4 @@
 
 package io.foundry.aether.core.storage;
 
-public record ListBlobsRequest(String bucket, String prefix) {}
+public record ListBlobsRequest(String bucket, String prefix, String cursor) {}

@@ -6,7 +6,6 @@
 package io.foundry.aether.core.storage;
 
 import io.foundry.aether.core.CloudService;
-import java.util.List;
 
 public interface BlobStore extends CloudService {
 
@@ -21,9 +20,9 @@ public interface BlobStore extends CloudService {
 
     BlobContent download(BlobRef ref);
 
-    List<BlobMetadata> list(ListBlobsRequest request);
+    ListBlobsResponse list(ListBlobsRequest request);
 
-    void delete(BlobRef ref);
+    BlobMetadata delete(BlobRef ref);
 
     boolean exists(BlobRef ref);
 

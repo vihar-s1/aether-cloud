@@ -12,6 +12,7 @@ import io.foundry.aether.core.exception.ProviderUnavailableException;
 
 public class NFSCloudProvider implements CloudProvider {
 
+    public static final String PROVIDER_NAME = "nfs";
     private ProviderStatus status = ProviderStatus.INITIALIZED;
     private final String basePath;
 
@@ -25,7 +26,7 @@ public class NFSCloudProvider implements CloudProvider {
 
     @Override
     public String name() {
-        return "nfs";
+        return PROVIDER_NAME;
     }
 
     @Override
@@ -36,10 +37,10 @@ public class NFSCloudProvider implements CloudProvider {
     @Override
     public void initialize() {
         if (status == ProviderStatus.SHUTDOWN) {
-            throw new InvalidConfigurationException("nfs", "initialize", "Provider has been shut down");
+            throw new InvalidConfigurationException(PROVIDER_NAME, "initialize", "Provider has been shut down");
         }
         if (status == ProviderStatus.RUNNING) {
-            throw new InvalidConfigurationException("nfs", "initialize", "Provider is already running");
+            throw new InvalidConfigurationException(PROVIDER_NAME, "initialize", "Provider is already running");
         }
         status = ProviderStatus.RUNNING;
     }
@@ -47,7 +48,7 @@ public class NFSCloudProvider implements CloudProvider {
     @Override
     public void shutdown() {
         if (status == ProviderStatus.SHUTDOWN) {
-            throw new ProviderUnavailableException("nfs", "shutdown", "Provider is already shut down");
+            throw new ProviderUnavailableException(PROVIDER_NAME, "shutdown", "Provider is already shut down");
         }
         status = ProviderStatus.SHUTDOWN;
     }

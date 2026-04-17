@@ -48,7 +48,7 @@ public class InMemoryComputeEngine implements ComputeEngine {
     public void terminateInstance(String instanceId) {
         InstanceInfo existing = instances.get(instanceId);
         if (existing == null) {
-            throw new ResourceNotFoundException("inmemory", "terminateInstance", instanceId, "Instance not found");
+            throw new ResourceNotFoundException(provider.name(), "terminateInstance", instanceId, "Instance not found");
         }
         instances.put(instanceId, existing.withState(InstanceState.TERMINATED));
     }
@@ -57,7 +57,7 @@ public class InMemoryComputeEngine implements ComputeEngine {
     public InstanceInfo getInstance(String instanceId) {
         InstanceInfo info = instances.get(instanceId);
         if (info == null) {
-            throw new ResourceNotFoundException("inmemory", "getInstance", instanceId, "Instance not found");
+            throw new ResourceNotFoundException(provider.name(), "getInstance", instanceId, "Instance not found");
         }
         return info;
     }

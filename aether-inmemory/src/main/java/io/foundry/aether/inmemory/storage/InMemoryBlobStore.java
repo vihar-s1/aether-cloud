@@ -8,12 +8,7 @@ package io.foundry.aether.inmemory.storage;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.exception.ProviderUnavailableException;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
-import io.foundry.aether.core.storage.BlobContent;
-import io.foundry.aether.core.storage.BlobMetadata;
-import io.foundry.aether.core.storage.BlobRef;
-import io.foundry.aether.core.storage.BlobStore;
-import io.foundry.aether.core.storage.ListBlobsRequest;
-import io.foundry.aether.core.storage.UploadBlobRequest;
+import io.foundry.aether.core.storage.*;
 import io.foundry.aether.inmemory.InMemoryCloudProvider;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -51,7 +46,7 @@ public class InMemoryBlobStore implements BlobStore {
             store.put(new BlobRef(request.bucket(), request.key()), new StoredBlob(bytes, metadata));
             return metadata;
         } catch (IOException e) {
-            throw new ProviderUnavailableException("inmemory", "upload", "Failed to read input stream", e);
+            throw new ProviderUnavailableException(provider.name(), "upload", "Failed to read input stream", e);
         }
     }
 
@@ -59,23 +54,25 @@ public class InMemoryBlobStore implements BlobStore {
     public BlobContent download(BlobRef ref) {
         StoredBlob blob = store.get(ref);
         if (blob == null) {
-            throw new ResourceNotFoundException("inmemory", "download", BlobStore.BLOB, ref.getId());
+            throw new ResourceNotFoundException(provider.name(), "download", BlobStore.BLOB, ref.getId());
         }
         return new BlobContent(new ByteArrayInputStream(blob.data()), blob.metadata());
     }
 
     @Override
-    public List<BlobMetadata> list(ListBlobsRequest request) {
-        return store.entrySet().stream()
+    public ListBlobsResponse list(ListBlobsRequest request) {
+        List<BlobMetadata> blobs = store.entrySet().stream()
                 .filter(e -> e.getKey().bucket().equals(request.bucket())
                         && e.getKey().key().startsWith(request.prefix()))
                 .map(e -> e.getValue().metadata())
                 .toList();
+        return new ListBlobsResponse(blobs, null, false);
     }
 
     @Override
-    public void delete(BlobRef ref) {
-        store.remove(ref);
+    public BlobMetadata delete(BlobRef ref) {
+        StoredBlob blob = store.remove(ref);
+        return blob == null ? null : blob.metadata();
     }
 
     @Override
@@ -87,7 +84,7 @@ public class InMemoryBlobStore implements BlobStore {
     public BlobMetadata getMetadata(BlobRef ref) {
         StoredBlob blob = store.get(ref);
         if (blob == null) {
-            throw new ResourceNotFoundException("inmemory", "getMetadata", BlobStore.BLOB, ref.getId());
+            throw new ResourceNotFoundException(provider.name(), "getMetadata", BlobStore.BLOB, ref.getId());
         }
         return blob.metadata();
     }
