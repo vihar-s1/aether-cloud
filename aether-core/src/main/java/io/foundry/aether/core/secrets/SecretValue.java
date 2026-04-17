@@ -5,6 +5,4 @@
 
 package io.foundry.aether.core.secrets;
 
-import java.time.Instant;
-
-public record SecretValue(String secretId, String value, String versionId, Instant createdAt) {}
+public record SecretValue(String secretId, String value, String versionId, long createdAtMs) {}

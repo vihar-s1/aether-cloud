@@ -7,7 +7,6 @@ package io.foundry.aether.core.secrets;
 
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
-import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 
@@ -35,7 +34,7 @@ public abstract class AbstractSecretManager<T extends CloudProvider> implements 
                 secretId,
                 entry.value(),
                 entry.metadata().versionId(),
-                entry.metadata().createdAt());
+                entry.metadata().createdAtMs());
     }
 
     @Override
@@ -43,9 +42,9 @@ public abstract class AbstractSecretManager<T extends CloudProvider> implements 
         SecretEntry entry = readEntry(secretId);
         String versionId =
                 entry != null ? String.valueOf(Integer.parseInt(entry.metadata().versionId()) + 1) : "1";
-        Instant createdAt = entry != null ? entry.metadata().createdAt() : Instant.now();
-        Instant rotatedAt = entry != null ? entry.metadata().lastRotatedAt() : null;
-        var metadata = new SecretMetadata(secretId, secretId, null, versionId, createdAt, rotatedAt);
+        long createdAtMs = entry != null ? entry.metadata().createdAtMs() : System.currentTimeMillis();
+        long rotatedAtMs = entry != null ? entry.metadata().lastRotatedAtMs() : 0L;
+        var metadata = new SecretMetadata(secretId, secretId, null, versionId, createdAtMs, rotatedAtMs);
         upsertEntry(secretId, new SecretEntry(value, metadata));
         return metadata;
     }
@@ -57,12 +56,12 @@ public abstract class AbstractSecretManager<T extends CloudProvider> implements 
             throw new ResourceNotFoundException(cloudProvider.name(), "rotate", secretId, "Secret not found");
         }
         String newVersionId = String.valueOf(Integer.parseInt(entry.metadata().versionId()) + 1);
-        Instant now = Instant.now();
+        long nowMs = System.currentTimeMillis();
         var metadata = new SecretMetadata(
-                secretId, secretId, null, newVersionId, entry.metadata().createdAt(), now);
+                secretId, secretId, null, newVersionId, entry.metadata().createdAtMs(), nowMs);
         upsertEntry(secretId, new SecretEntry(entry.value(), metadata));
         return new SecretValue(
-                secretId, entry.value(), newVersionId, entry.metadata().createdAt());
+                secretId, entry.value(), newVersionId, entry.metadata().createdAtMs());
     }
 
     @Override

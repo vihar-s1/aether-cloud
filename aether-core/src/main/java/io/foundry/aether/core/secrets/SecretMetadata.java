@@ -5,7 +5,5 @@
 
 package io.foundry.aether.core.secrets;
 
-import java.time.Instant;
-
 public record SecretMetadata(
-        String secretId, String name, String description, String versionId, Instant createdAt, Instant lastRotatedAt) {}
+        String secretId, String name, String description, String versionId, long createdAtMs, long lastRotatedAtMs) {}
