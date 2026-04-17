@@ -3,13 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package io.foundry.aether.s3.storage;
+package io.foundry.aether.aws.storage;
 
+import io.foundry.aether.aws.AwsCloudProvider;
+import io.foundry.aether.aws.internal.AwsUtils;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.internal.StringUtils;
-import io.foundry.aether.core.storage.*;
-import io.foundry.aether.s3.S3CloudProvider;
-import io.foundry.aether.s3.internal.S3Utils;
+import io.foundry.aether.core.storage.BlobContent;
+import io.foundry.aether.core.storage.BlobMetadata;
+import io.foundry.aether.core.storage.BlobRef;
+import io.foundry.aether.core.storage.BlobStore;
+import io.foundry.aether.core.storage.ListBlobsRequest;
+import io.foundry.aether.core.storage.ListBlobsResponse;
+import io.foundry.aether.core.storage.UploadBlobRequest;
 import java.net.URI;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -18,14 +24,21 @@ import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.*;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
-public class S3BlobStore implements BlobStore {
+public class AwsS3BlobStore implements BlobStore {
 
-    private final S3CloudProvider provider;
+    private final AwsCloudProvider provider;
     private final S3Client s3Client;
 
-    public S3BlobStore(S3CloudProvider provider) {
+    public AwsS3BlobStore(AwsCloudProvider provider) {
         this.provider = provider;
         var builder = S3Client.builder()
                 .region(Region.of(provider.region()))
@@ -64,7 +77,7 @@ public class S3BlobStore implements BlobStore {
                     response.lastModified().toEpochMilli(),
                     response.metadata());
         } catch (AwsServiceException | SdkClientException e) {
-            throw S3Utils.wrapS3Exception(e, "upload", BlobStore.BLOB, request.key());
+            throw AwsUtils.wrapS3Exception(e, "upload", BlobStore.BLOB, request.key());
         }
     }
 
@@ -88,7 +101,7 @@ public class S3BlobStore implements BlobStore {
                     response.metadata());
             return new BlobContent(data, metadata);
         } catch (AwsServiceException | SdkClientException e) {
-            throw S3Utils.wrapS3Exception(e, "download", BlobStore.BLOB, ref.getId());
+            throw AwsUtils.wrapS3Exception(e, "download", BlobStore.BLOB, ref.getId());
         }
     }
 
@@ -103,7 +116,7 @@ public class S3BlobStore implements BlobStore {
         try {
             response = s3Client.listObjectsV2(listRequest);
         } catch (AwsServiceException | SdkClientException e) {
-            throw S3Utils.wrapS3Exception(
+            throw AwsUtils.wrapS3Exception(
                     e, "list", BlobStore.BLOB, new BlobRef(request.bucket(), request.prefix()).getId());
         }
         var blobs = response.contents().stream()
@@ -127,7 +140,7 @@ public class S3BlobStore implements BlobStore {
         try {
             s3Client.deleteObject(deleteRequest);
         } catch (AwsServiceException | SdkClientException e) {
-            throw S3Utils.wrapS3Exception(e, "delete", BlobStore.BLOB, ref.getId());
+            throw AwsUtils.wrapS3Exception(e, "delete", BlobStore.BLOB, ref.getId());
         }
         return new BlobMetadata(ref.bucket(), ref.key(), 0, null, 0, null);
     }
@@ -160,7 +173,7 @@ public class S3BlobStore implements BlobStore {
                     response.lastModified().toEpochMilli(),
                     response.metadata());
         } catch (AwsServiceException | SdkClientException e) {
-            throw S3Utils.wrapS3Exception(e, "getMetadata", BlobStore.BLOB, ref.getId());
+            throw AwsUtils.wrapS3Exception(e, "getMetadata", BlobStore.BLOB, ref.getId());
         }
     }
 }

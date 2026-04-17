@@ -3,15 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package io.foundry.aether.s3;
+package io.foundry.aether.aws;
 
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.ProviderStatus;
 import io.foundry.aether.core.exception.InvalidConfigurationException;
 
-public class S3CloudProvider implements CloudProvider {
+public class AwsCloudProvider implements CloudProvider {
 
-    public static final String PROVIDER_NAME = "s3";
+    public static final String PROVIDER_NAME = "aws";
 
     private final String accessKey;
     private final String secretKey;
@@ -19,7 +19,7 @@ public class S3CloudProvider implements CloudProvider {
     private final String region;
     private volatile ProviderStatus status = ProviderStatus.INITIALIZED;
 
-    public S3CloudProvider(String accessKey, String secretKey, String endpoint, String region) {
+    public AwsCloudProvider(String accessKey, String secretKey, String endpoint, String region) {
         this.accessKey = nullSafe(accessKey, "accessKey");
         this.secretKey = nullSafe(secretKey, "secretKey");
         this.endpoint = endpoint;

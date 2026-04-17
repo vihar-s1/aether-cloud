@@ -2,7 +2,7 @@ plugins {
     id("io.foundry.aether.java-conventions")
 }
 
-description = "S3-compatible provider implementation for Aether (AWS, DigitalOcean, MinIO)"
+description = "AWS provider implementation for Aether (S3, EC2, Secrets Manager, KMS)"
 
 dependencies {
     api(project(":aether-core"))

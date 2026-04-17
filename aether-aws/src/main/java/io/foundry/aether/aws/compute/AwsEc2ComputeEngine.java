@@ -3,15 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package io.foundry.aether.s3.compute;
+package io.foundry.aether.aws.compute;
 
+import io.foundry.aether.aws.AwsCloudProvider;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.compute.ComputeEngine;
 import io.foundry.aether.core.compute.InstanceConfig;
 import io.foundry.aether.core.compute.InstanceInfo;
 import io.foundry.aether.core.compute.InstanceState;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
-import io.foundry.aether.s3.S3CloudProvider;
 import java.util.List;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -26,12 +26,12 @@ import software.amazon.awssdk.services.ec2.model.Tag;
 import software.amazon.awssdk.services.ec2.model.TagSpecification;
 import software.amazon.awssdk.services.ec2.model.TerminateInstancesRequest;
 
-public class S3ComputeEngine implements ComputeEngine {
+public class AwsEc2ComputeEngine implements ComputeEngine {
 
-    private final S3CloudProvider provider;
+    private final AwsCloudProvider provider;
     private final Ec2Client ec2Client;
 
-    public S3ComputeEngine(S3CloudProvider provider) {
+    public AwsEc2ComputeEngine(AwsCloudProvider provider) {
         this.provider = provider;
         ec2Client = Ec2Client.builder()
                 .region(Region.of(provider.region()))

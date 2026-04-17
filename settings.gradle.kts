@@ -10,4 +10,4 @@ pluginManagement {
 include("aether-core")
 include("aether-inmemory")
 include("aether-nfs")
-include("aether-s3")
+include("aether-aws")

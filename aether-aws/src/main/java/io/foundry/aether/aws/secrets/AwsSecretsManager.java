@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package io.foundry.aether.s3.secrets;
+package io.foundry.aether.aws.secrets;
 
+import io.foundry.aether.aws.AwsCloudProvider;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
 import io.foundry.aether.core.secrets.SecretManager;
 import io.foundry.aether.core.secrets.SecretMetadata;
 import io.foundry.aether.core.secrets.SecretValue;
-import io.foundry.aether.s3.S3CloudProvider;
 import java.util.List;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -28,12 +28,12 @@ import software.amazon.awssdk.services.secretsmanager.model.PutSecretValueReques
 import software.amazon.awssdk.services.secretsmanager.model.PutSecretValueResponse;
 import software.amazon.awssdk.services.secretsmanager.model.SecretListEntry;
 
-public class S3SecretManager implements SecretManager {
+public class AwsSecretsManager implements SecretManager {
 
-    private final S3CloudProvider provider;
+    private final AwsCloudProvider provider;
     private final SecretsManagerClient secretsClient;
 
-    public S3SecretManager(S3CloudProvider provider) {
+    public AwsSecretsManager(AwsCloudProvider provider) {
         this.provider = provider;
         secretsClient = SecretsManagerClient.builder()
                 .region(Region.of(provider.region()))
