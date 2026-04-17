@@ -73,16 +73,38 @@ public class NFSSecretManager extends AbstractSecretManager<NFSCloudProvider> {
     }
 
     @Override
-    protected void upsertEntry(String secretId, SecretEntry entry) {
-        Path valuePath = toPath(cloudProvider, new BlobRef(SECRETS_BUCKET, sanitizeName(secretId) + ".value"));
-        Path metadataPath = toPath(cloudProvider, new BlobRef(SECRETS_BUCKET, sanitizeName(secretId) + ".metadata"));
-        try {
-            Files.createDirectories(valuePath.getParent());
-            Files.writeString(valuePath, entry.value());
-            Files.writeString(metadataPath, JsonUtils.toJson(entry.metadata()));
-        } catch (IOException e) {
-            throw NSFUtils.wrapIOException(e, "upsertEntry", new BlobRef(SECRETS_BUCKET, secretId));
+    protected SecretMetadata findSecretMetadata(String secretId) {
+        Path secretsBucketPath = Path.of(cloudProvider.basePath(), SECRETS_BUCKET);
+        Path metadataPath = secretsBucketPath.resolve(sanitizeName(secretId) + ".metadata");
+        if (!Files.exists(metadataPath)) {
+            return null;
         }
+        try (InputStream metadataStream = Files.newInputStream(metadataPath)) {
+            return JsonUtils.fromJson(metadataStream, SecretMetadata.class);
+        } catch (IOException e) {
+            throw NSFUtils.wrapIOException(e, "findSecretMetadata", new BlobRef(SECRETS_BUCKET, secretId));
+        }
+    }
+
+    @Override
+    protected VersionInfo createEntry(String secretId, String value) {
+        String versionId = String.valueOf(System.nanoTime());
+        long createdAt = System.currentTimeMillis();
+        SecretMetadata metadata = new SecretMetadata(secretId, secretId, null, versionId, createdAt, 0L);
+        SecretEntry entry = SecretEntry.of(value, metadata);
+        _upsertEntry(secretId, entry, "createEntry");
+        return new VersionInfo(versionId, createdAt);
+    }
+
+    @Override
+    protected VersionInfo updateEntry(String secretId, String value) {
+        SecretEntry existing = readEntry(secretId);
+        String versionId = String.valueOf(System.nanoTime());
+        long updatedAt = System.currentTimeMillis();
+        SecretMetadata newMetadata = existing.metadata().updateVersion(versionId);
+        SecretEntry entry = SecretEntry.of(value, newMetadata);
+        _upsertEntry(secretId, entry, "updateEntry");
+        return new VersionInfo(versionId, updatedAt);
     }
 
     @Override
@@ -101,6 +123,18 @@ public class NFSSecretManager extends AbstractSecretManager<NFSCloudProvider> {
             }
         }
         return existingEntry;
+    }
+
+    private void _upsertEntry(String secretId, SecretEntry entry, String operation) {
+        Path valuePath = toPath(cloudProvider, new BlobRef(SECRETS_BUCKET, sanitizeName(secretId) + ".value"));
+        Path metadataPath = toPath(cloudProvider, new BlobRef(SECRETS_BUCKET, sanitizeName(secretId) + ".metadata"));
+        try {
+            Files.createDirectories(valuePath.getParent());
+            Files.writeString(valuePath, entry.value());
+            Files.writeString(metadataPath, JsonUtils.toJson(entry.metadata()));
+        } catch (IOException e) {
+            throw NSFUtils.wrapIOException(e, operation, new BlobRef(SECRETS_BUCKET, secretId));
+        }
     }
 
     private String sanitizeName(String name) {
