@@ -10,13 +10,19 @@ public final class ResourceNotFoundException extends CloudException {
     private final String resourceId;
 
     public ResourceNotFoundException(
-            String providerName, String operation, String resourceId, String message, Throwable cause) {
-        super(providerName, operation, null, false, message, cause);
+            String providerName, String operation, String resourceType, String resourceId, Throwable cause) {
+        super(
+                providerName,
+                operation,
+                null,
+                false,
+                "Resource " + resourceType + " Not found for id: " + resourceId,
+                cause);
         this.resourceId = resourceId;
     }
 
-    public ResourceNotFoundException(String providerName, String operation, String resourceId, String message) {
-        this(providerName, operation, resourceId, message, null);
+    public ResourceNotFoundException(String providerName, String operation, String resourceType, String resourceId) {
+        this(providerName, operation, resourceType, resourceId, null);
     }
 
     public String resourceId() {

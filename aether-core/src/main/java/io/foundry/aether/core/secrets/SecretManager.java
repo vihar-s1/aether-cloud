@@ -10,6 +10,11 @@ import java.util.List;
 
 public interface SecretManager extends CloudService {
 
+    @Override
+    default String serviceName() {
+        return "secret-manager";
+    }
+
     SecretValue getSecret(String secretId);
 
     SecretMetadata putSecret(String secretId, String value);

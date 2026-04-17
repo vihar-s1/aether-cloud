@@ -14,6 +14,7 @@ import io.foundry.aether.core.storage.BlobRef;
 import io.foundry.aether.core.storage.BlobStore;
 import io.foundry.aether.core.storage.ListBlobsRequest;
 import io.foundry.aether.core.storage.UploadBlobRequest;
+import io.foundry.aether.inmemory.InMemoryCloudProvider;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.Instant;
@@ -25,21 +26,16 @@ public class InMemoryBlobStore implements BlobStore {
 
     private record StoredBlob(byte[] data, BlobMetadata metadata) {}
 
-    private final CloudProvider provider;
+    private final InMemoryCloudProvider provider;
     private final ConcurrentHashMap<BlobRef, StoredBlob> store = new ConcurrentHashMap<>();
 
-    public InMemoryBlobStore(CloudProvider provider) {
+    public InMemoryBlobStore(InMemoryCloudProvider provider) {
         this.provider = provider;
     }
 
     @Override
     public CloudProvider provider() {
         return provider;
-    }
-
-    @Override
-    public String serviceName() {
-        return "blob-store";
     }
 
     @Override
@@ -59,8 +55,7 @@ public class InMemoryBlobStore implements BlobStore {
     public BlobContent download(BlobRef ref) {
         StoredBlob blob = store.get(ref);
         if (blob == null) {
-            throw new ResourceNotFoundException(
-                    "inmemory", "download", ref.bucket() + "/" + ref.key(), "Blob not found");
+            throw new ResourceNotFoundException("inmemory", "download", BlobStore.BLOB, ref.getId());
         }
         return new BlobContent(new ByteArrayInputStream(blob.data()), blob.metadata());
     }
@@ -88,8 +83,7 @@ public class InMemoryBlobStore implements BlobStore {
     public BlobMetadata getMetadata(BlobRef ref) {
         StoredBlob blob = store.get(ref);
         if (blob == null) {
-            throw new ResourceNotFoundException(
-                    "inmemory", "getMetadata", ref.bucket() + "/" + ref.key(), "Blob not found");
+            throw new ResourceNotFoundException("inmemory", "getMetadata", BlobStore.BLOB, ref.getId());
         }
         return blob.metadata();
     }

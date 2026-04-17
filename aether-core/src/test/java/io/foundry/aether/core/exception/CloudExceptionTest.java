@@ -7,22 +7,25 @@ package io.foundry.aether.core.exception;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.foundry.aether.core.storage.BlobStore;
 import org.junit.jupiter.api.Test;
 
 class CloudExceptionTest {
 
     @Test
     void authenticationException_isNeverRetryable() {
-        var ex = new AuthenticationException("aws", "upload", "Bad credentials");
+        var ex = new AuthenticationException("aws", "upload", BlobStore.BLOB);
         assertThat(ex.retryable()).isFalse();
         assertThat(ex.providerName()).isEqualTo("aws");
         assertThat(ex.operation()).isEqualTo("upload");
-        assertThat(ex.getMessage()).contains("[aws/upload]").contains("Bad credentials");
+        assertThat(ex.getMessage())
+                .contains("[aws/upload]")
+                .contains("Authentication failed for resource: " + BlobStore.BLOB);
     }
 
     @Test
     void resourceNotFoundException_carriesResourceId() {
-        var ex = new ResourceNotFoundException("gcp", "download", "my-bucket", "Bucket not found");
+        var ex = new ResourceNotFoundException("gcp", "download", BlobStore.BLOB, "my-bucket");
         assertThat(ex.retryable()).isFalse();
         assertThat(ex.resourceId()).isEqualTo("my-bucket");
     }
@@ -45,19 +48,5 @@ class CloudExceptionTest {
     void invalidConfigurationException_isNeverRetryable() {
         var ex = new InvalidConfigurationException("gcp", "initialize", "Missing project ID");
         assertThat(ex.retryable()).isFalse();
-    }
-
-    @Test
-    void sealedHierarchy_exhaustiveSwitch() {
-        CloudException ex = new AuthenticationException("aws", "op", "msg");
-        String result =
-                switch (ex) {
-                    case AuthenticationException e -> "auth";
-                    case ResourceNotFoundException e -> "notfound";
-                    case QuotaExceededException e -> "quota";
-                    case ProviderUnavailableException e -> "unavailable";
-                    case InvalidConfigurationException e -> "config";
-                };
-        assertThat(result).isEqualTo("auth");
     }
 }

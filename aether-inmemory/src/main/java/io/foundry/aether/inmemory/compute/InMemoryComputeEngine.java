@@ -31,11 +31,6 @@ public class InMemoryComputeEngine implements ComputeEngine {
     }
 
     @Override
-    public String serviceName() {
-        return "compute-engine";
-    }
-
-    @Override
     public InstanceInfo createInstance(InstanceConfig config) {
         String instanceId = UUID.randomUUID().toString();
         var info = new InstanceInfo(

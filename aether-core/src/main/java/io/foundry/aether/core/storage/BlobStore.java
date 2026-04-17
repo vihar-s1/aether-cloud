@@ -10,6 +10,13 @@ import java.util.List;
 
 public interface BlobStore extends CloudService {
 
+    String BLOB = "blob";
+    String BUCKET = "bucket";
+
+    default String serviceName() {
+        return "blob-store";
+    }
+
     BlobMetadata upload(UploadBlobRequest request);
 
     BlobContent download(BlobRef ref);

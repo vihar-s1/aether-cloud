@@ -10,7 +10,8 @@ public abstract sealed class CloudException extends RuntimeException
                 ResourceNotFoundException,
                 QuotaExceededException,
                 ProviderUnavailableException,
-                InvalidConfigurationException {
+                InvalidConfigurationException,
+                GenericCloudException {
 
     private final String providerName;
     private final String operation;
