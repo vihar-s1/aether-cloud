@@ -5,59 +5,91 @@
 
 package io.foundry.aether.inmemory.secrets;
 
-import io.foundry.aether.core.secrets.AbstractSecretManager;
+import io.foundry.aether.core.CloudProvider;
+import io.foundry.aether.core.exception.ResourceNotFoundException;
+import io.foundry.aether.core.secrets.SecretManager;
 import io.foundry.aether.core.secrets.SecretMetadata;
+import io.foundry.aether.core.secrets.SecretValue;
 import io.foundry.aether.inmemory.InMemoryCloudProvider;
-import java.util.Collection;
-import java.util.Optional;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class InMemorySecretManager extends AbstractSecretManager<InMemoryCloudProvider> {
+public class InMemorySecretManager implements SecretManager {
 
-    private final ConcurrentHashMap<String, SecretEntry> secrets = new ConcurrentHashMap<>();
+    private final InMemoryCloudProvider provider;
+    private final ConcurrentHashMap<String, Entry> secrets = new ConcurrentHashMap<>();
+
+    private record Entry(String value, SecretMetadata metadata) {}
 
     public InMemorySecretManager(InMemoryCloudProvider provider) {
-        super(provider);
+        this.provider = provider;
     }
 
     @Override
-    protected SecretEntry readEntry(String secretId) {
-        return secrets.getOrDefault(secretId, null);
+    public CloudProvider provider() {
+        return provider;
     }
 
     @Override
-    protected Collection<SecretMetadata> listEntries() {
-        return secrets.values().stream().map(SecretEntry::metadata).toList();
+    public SecretValue getSecret(String secretId) {
+        Entry entry = secrets.get(secretId);
+        if (entry == null) {
+            throw new ResourceNotFoundException(provider.name(), "getSecret", SECRET, secretId);
+        }
+        return new SecretValue(
+                secretId,
+                entry.value(),
+                entry.metadata().versionId(),
+                entry.metadata().createdAtMs());
     }
 
     @Override
-    protected SecretMetadata findSecretMetadata(String secretId) {
-        return Optional.ofNullable(secrets.get(secretId))
-                .map(SecretEntry::metadata)
-                .orElse(null);
-    }
-
-    @Override
-    protected VersionInfo createEntry(String secretId, String value) {
+    public SecretMetadata createSecret(String secretId, String value) {
+        if (secrets.containsKey(secretId)) {
+            throw new IllegalStateException("Secret already exists: " + secretId);
+        }
         String versionId = String.valueOf(System.nanoTime());
         long createdAt = System.currentTimeMillis();
         SecretMetadata metadata = new SecretMetadata(secretId, secretId, null, versionId, createdAt, 0L);
-        secrets.put(secretId, SecretEntry.of(value, metadata));
-        return new VersionInfo(versionId, createdAt);
+        secrets.put(secretId, new Entry(value, metadata));
+        return metadata;
     }
 
     @Override
-    protected VersionInfo updateEntry(String secretId, String value) {
-        SecretEntry existing = secrets.get(secretId);
+    public SecretMetadata updateSecret(String secretId, String value) {
+        Entry existing = secrets.get(secretId);
+        if (existing == null) {
+            throw new ResourceNotFoundException(provider.name(), "updateSecret", SECRET, secretId);
+        }
         String versionId = String.valueOf(System.nanoTime());
-        long updatedAt = System.currentTimeMillis();
         SecretMetadata newMetadata = existing.metadata().updateVersion(versionId);
-        secrets.put(secretId, SecretEntry.of(value, newMetadata));
-        return new VersionInfo(versionId, updatedAt);
+        secrets.put(secretId, new Entry(value, newMetadata));
+        return newMetadata;
     }
 
     @Override
-    protected SecretEntry deleteEntry(String secretId) {
-        return secrets.remove(secretId);
+    public SecretValue rotate(String secretId) {
+        Entry entry = secrets.get(secretId);
+        if (entry == null) {
+            throw new ResourceNotFoundException(provider.name(), "rotate", SECRET, secretId);
+        }
+        String versionId = String.valueOf(System.nanoTime());
+        SecretMetadata newMetadata = entry.metadata().updateVersion(versionId);
+        secrets.put(secretId, new Entry(entry.value(), newMetadata));
+        return new SecretValue(
+                secretId, entry.value(), versionId, entry.metadata().createdAtMs());
+    }
+
+    @Override
+    public void deleteSecret(String secretId) {
+        Entry removed = secrets.remove(secretId);
+        if (removed == null) {
+            throw new ResourceNotFoundException(provider.name(), "deleteSecret", SECRET, secretId);
+        }
+    }
+
+    @Override
+    public List<SecretMetadata> listSecrets() {
+        return secrets.values().stream().map(Entry::metadata).toList();
     }
 }

@@ -5,10 +5,13 @@
 
 package io.foundry.aether.s3.secrets;
 
-import io.foundry.aether.core.secrets.AbstractSecretManager;
+import io.foundry.aether.core.CloudProvider;
+import io.foundry.aether.core.exception.ResourceNotFoundException;
+import io.foundry.aether.core.secrets.SecretManager;
 import io.foundry.aether.core.secrets.SecretMetadata;
+import io.foundry.aether.core.secrets.SecretValue;
 import io.foundry.aether.s3.S3CloudProvider;
-import java.util.Collection;
+import java.util.List;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.SdkBytes;
@@ -25,12 +28,13 @@ import software.amazon.awssdk.services.secretsmanager.model.PutSecretValueReques
 import software.amazon.awssdk.services.secretsmanager.model.PutSecretValueResponse;
 import software.amazon.awssdk.services.secretsmanager.model.SecretListEntry;
 
-public class S3SecretManager extends AbstractSecretManager<S3CloudProvider> {
+public class S3SecretManager implements SecretManager {
 
+    private final S3CloudProvider provider;
     private final SecretsManagerClient secretsClient;
 
     public S3SecretManager(S3CloudProvider provider) {
-        super(provider);
+        this.provider = provider;
         secretsClient = SecretsManagerClient.builder()
                 .region(Region.of(provider.region()))
                 .credentialsProvider(StaticCredentialsProvider.create(
@@ -39,80 +43,91 @@ public class S3SecretManager extends AbstractSecretManager<S3CloudProvider> {
     }
 
     @Override
-    protected SecretEntry readEntry(String secretId) {
+    public CloudProvider provider() {
+        return provider;
+    }
+
+    @Override
+    public SecretValue getSecret(String secretId) {
         try {
             GetSecretValueResponse response = secretsClient.getSecretValue(
                     GetSecretValueRequest.builder().secretId(secretId).build());
-            SecretMetadata metadata = new SecretMetadata(
+            return new SecretValue(
                     secretId,
-                    response.name(),
-                    null,
+                    _decryptSecretString(response.secretBinary()),
                     response.versionId(),
-                    response.createdDate().toEpochMilli(),
-                    0L);
-            return SecretEntry.of(_decryptSecretString(response.secretBinary()), metadata);
+                    response.createdDate().toEpochMilli());
         } catch (software.amazon.awssdk.services.secretsmanager.model.ResourceNotFoundException e) {
-            return null;
+            throw new ResourceNotFoundException(provider.name(), "getSecret", SECRET, secretId);
         }
     }
 
     @Override
-    protected SecretMetadata findSecretMetadata(String secretId) {
-        try {
-            GetSecretValueResponse response = secretsClient.getSecretValue(
-                    GetSecretValueRequest.builder().secretId(secretId).build());
-            return new SecretMetadata(
-                    secretId,
-                    response.name(),
-                    null,
-                    response.versionId(),
-                    response.createdDate().toEpochMilli(),
-                    0L);
-        } catch (software.amazon.awssdk.services.secretsmanager.model.ResourceNotFoundException e) {
-            return null;
-        }
-    }
-
-    @Override
-    protected Collection<SecretMetadata> listEntries() {
-        ListSecretsResponse response =
-                secretsClient.listSecrets(ListSecretsRequest.builder().build());
-        return response.secretList().stream().map(this::_secretEntryToMetadata).toList();
-    }
-
-    @Override
-    protected VersionInfo createEntry(String secretId, String value) {
+    public SecretMetadata createSecret(String secretId, String value) {
         CreateSecretResponse response = secretsClient.createSecret(CreateSecretRequest.builder()
                 .name(secretId)
                 .secretBinary(_encryptSecretString(value))
                 .build());
-        return new VersionInfo(response.versionId(), System.currentTimeMillis());
+        return new SecretMetadata(secretId, secretId, null, response.versionId(), System.currentTimeMillis(), 0L);
     }
 
     @Override
-    protected VersionInfo updateEntry(String secretId, String value) {
-        PutSecretValueResponse response = secretsClient.putSecretValue(PutSecretValueRequest.builder()
-                .secretId(secretId)
-                .secretBinary(_encryptSecretString(value))
-                .build());
-        return new VersionInfo(response.versionId(), System.currentTimeMillis());
-    }
-
-    @Override
-    protected SecretEntry deleteEntry(String secretId) {
-        SecretEntry existing = readEntry(secretId);
-        if (existing == null) {
-            return null;
+    public SecretMetadata updateSecret(String secretId, String value) {
+        try {
+            GetSecretValueResponse existing = secretsClient.getSecretValue(
+                    GetSecretValueRequest.builder().secretId(secretId).build());
+            PutSecretValueResponse response = secretsClient.putSecretValue(PutSecretValueRequest.builder()
+                    .secretId(secretId)
+                    .secretBinary(_encryptSecretString(value))
+                    .build());
+            return new SecretMetadata(
+                    secretId,
+                    existing.name(),
+                    null,
+                    response.versionId(),
+                    existing.createdDate().toEpochMilli(),
+                    System.currentTimeMillis());
+        } catch (software.amazon.awssdk.services.secretsmanager.model.ResourceNotFoundException e) {
+            throw new ResourceNotFoundException(provider.name(), "updateSecret", SECRET, secretId);
         }
+    }
+
+    @Override
+    public SecretValue rotate(String secretId) {
+        try {
+            GetSecretValueResponse response = secretsClient.getSecretValue(
+                    GetSecretValueRequest.builder().secretId(secretId).build());
+            PutSecretValueResponse rotateResponse = secretsClient.putSecretValue(PutSecretValueRequest.builder()
+                    .secretId(secretId)
+                    .secretBinary(response.secretBinary())
+                    .build());
+            return new SecretValue(
+                    secretId,
+                    _decryptSecretString(response.secretBinary()),
+                    rotateResponse.versionId(),
+                    response.createdDate().toEpochMilli());
+        } catch (software.amazon.awssdk.services.secretsmanager.model.ResourceNotFoundException e) {
+            throw new ResourceNotFoundException(provider.name(), "rotate", SECRET, secretId);
+        }
+    }
+
+    @Override
+    public void deleteSecret(String secretId) {
         try {
             secretsClient.deleteSecret(DeleteSecretRequest.builder()
                     .secretId(secretId)
                     .forceDeleteWithoutRecovery(true)
                     .build());
         } catch (software.amazon.awssdk.services.secretsmanager.model.ResourceNotFoundException e) {
-            return null;
+            throw new ResourceNotFoundException(provider.name(), "deleteSecret", SECRET, secretId);
         }
-        return existing;
+    }
+
+    @Override
+    public List<SecretMetadata> listSecrets() {
+        ListSecretsResponse response =
+                secretsClient.listSecrets(ListSecretsRequest.builder().build());
+        return response.secretList().stream().map(this::_entryToMetadata).toList();
     }
 
     private String _decryptSecretString(SdkBytes secretBinary) {
@@ -123,7 +138,7 @@ public class S3SecretManager extends AbstractSecretManager<S3CloudProvider> {
         return SdkBytes.fromUtf8String(secretString);
     }
 
-    private SecretMetadata _secretEntryToMetadata(SecretListEntry entry) {
+    private SecretMetadata _entryToMetadata(SecretListEntry entry) {
         long createdAt = entry.createdDate() != null ? entry.createdDate().toEpochMilli() : 0L;
         long lastRotated =
                 entry.lastRotatedDate() != null ? entry.lastRotatedDate().toEpochMilli() : 0L;
