@@ -7,6 +7,8 @@ build/
 
 # AI tools
 .claude/
+CLAUDE.md
+QWEN.md
 
 # IDE
 .idea/
