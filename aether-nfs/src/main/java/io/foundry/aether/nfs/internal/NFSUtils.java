@@ -20,9 +20,9 @@ import java.nio.file.FileSystemException;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 
-public final class NSFUtils {
+public final class NFSUtils {
 
-    private NSFUtils() {}
+    private NFSUtils() {}
 
     public static Path toPath(NFSCloudProvider provider, BlobRef blobRef) {
         return Path.of(provider.basePath()).resolve(blobRef.bucket()).resolve(blobRef.key());
