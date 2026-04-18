@@ -5,9 +5,10 @@
 
 package io.foundry.aether.nfs.secrets;
 
-import static io.foundry.aether.nfs.internal.NSFUtils.toPath;
+import static io.foundry.aether.nfs.internal.NFSUtils.toPath;
 
 import io.foundry.aether.core.CloudProvider;
+import io.foundry.aether.core.exception.InvalidConfigurationException;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
 import io.foundry.aether.core.internal.JsonUtils;
 import io.foundry.aether.core.secrets.SecretManager;
@@ -15,7 +16,7 @@ import io.foundry.aether.core.secrets.SecretMetadata;
 import io.foundry.aether.core.secrets.SecretValue;
 import io.foundry.aether.core.storage.BlobRef;
 import io.foundry.aether.nfs.NFSCloudProvider;
-import io.foundry.aether.nfs.internal.NSFUtils;
+import io.foundry.aether.nfs.internal.NFSUtils;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -55,7 +56,8 @@ public class NFSSecretManager implements SecretManager {
     @Override
     public SecretMetadata createSecret(String secretId, String value) {
         if (_findSecretMetadata(secretId) != null) {
-            throw new IllegalStateException("Secret already exists: " + secretId);
+            throw new InvalidConfigurationException(
+                    provider.name(), "createSecret", "Secret already exists: " + secretId);
         }
         String versionId = String.valueOf(System.nanoTime());
         long createdAt = System.currentTimeMillis();
@@ -101,7 +103,7 @@ public class NFSSecretManager implements SecretManager {
             Files.deleteIfExists(valuePath);
             Files.deleteIfExists(metadataPath);
         } catch (IOException e) {
-            throw NSFUtils.wrapIOException(e, "deleteSecret", new BlobRef(SECRETS_BUCKET, secretId));
+            throw NFSUtils.wrapIOException(e, "deleteSecret", new BlobRef(SECRETS_BUCKET, secretId));
         }
     }
 
@@ -118,7 +120,7 @@ public class NFSSecretManager implements SecretManager {
                         try (InputStream metadataStream = Files.newInputStream(path)) {
                             return JsonUtils.fromJson(metadataStream, SecretMetadata.class);
                         } catch (IOException e) {
-                            throw NSFUtils.wrapIOException(
+                            throw NFSUtils.wrapIOException(
                                     e,
                                     "listSecrets",
                                     new BlobRef(
@@ -127,7 +129,7 @@ public class NFSSecretManager implements SecretManager {
                     })
                     .toList();
         } catch (IOException e) {
-            throw NSFUtils.wrapIOException(e, "listSecrets", new BlobRef(SECRETS_BUCKET, null));
+            throw NFSUtils.wrapIOException(e, "listSecrets", new BlobRef(SECRETS_BUCKET, null));
         }
     }
 
@@ -143,7 +145,7 @@ public class NFSSecretManager implements SecretManager {
             SecretMetadata metadata = JsonUtils.fromJson(metadataStream, SecretMetadata.class);
             return new Entry(value, metadata);
         } catch (IOException e) {
-            throw NSFUtils.wrapIOException(e, "readEntry", new BlobRef(SECRETS_BUCKET, secretId));
+            throw NFSUtils.wrapIOException(e, "readEntry", new BlobRef(SECRETS_BUCKET, secretId));
         }
     }
 
@@ -156,7 +158,7 @@ public class NFSSecretManager implements SecretManager {
         try (InputStream metadataStream = Files.newInputStream(metadataPath)) {
             return JsonUtils.fromJson(metadataStream, SecretMetadata.class);
         } catch (IOException e) {
-            throw NSFUtils.wrapIOException(e, "findSecretMetadata", new BlobRef(SECRETS_BUCKET, secretId));
+            throw NFSUtils.wrapIOException(e, "findSecretMetadata", new BlobRef(SECRETS_BUCKET, secretId));
         }
     }
 
@@ -168,7 +170,7 @@ public class NFSSecretManager implements SecretManager {
             Files.writeString(valuePath, entry.value());
             Files.writeString(metadataPath, JsonUtils.toJson(entry.metadata()));
         } catch (IOException e) {
-            throw NSFUtils.wrapIOException(e, "upsertEntry", new BlobRef(SECRETS_BUCKET, secretId));
+            throw NFSUtils.wrapIOException(e, "upsertEntry", new BlobRef(SECRETS_BUCKET, secretId));
         }
     }
 

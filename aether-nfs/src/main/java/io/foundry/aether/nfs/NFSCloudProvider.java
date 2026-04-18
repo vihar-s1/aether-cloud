@@ -13,7 +13,7 @@ import io.foundry.aether.core.exception.ProviderUnavailableException;
 public class NFSCloudProvider implements CloudProvider {
 
     public static final String PROVIDER_NAME = "nfs";
-    private ProviderStatus status = ProviderStatus.INITIALIZED;
+    private volatile ProviderStatus status = ProviderStatus.INITIALIZED;
     private final String basePath;
 
     public NFSCloudProvider(String basePath) {

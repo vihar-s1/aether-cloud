@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.*;
 
 import io.foundry.aether.core.ProviderStatus;
 import io.foundry.aether.core.exception.InvalidConfigurationException;
+import io.foundry.aether.core.exception.ProviderUnavailableException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -18,8 +19,7 @@ class AwsCloudProviderTest {
     @Test
     @DisplayName("initializes with valid credentials and region")
     void testInitialization() {
-        var provider =
-                new AwsCloudProvider("test-key", "test-secret", "https://s3.amazonaws.com", "us-east-1");
+        var provider = new AwsCloudProvider("test-key", "test-secret", "https://s3.amazonaws.com", "us-east-1");
 
         assertThat(provider.name()).isEqualTo("aws");
         assertThat(provider.accessKey()).isEqualTo("test-key");
@@ -56,8 +56,8 @@ class AwsCloudProviderTest {
         provider.initialize();
 
         assertThatThrownBy(provider::initialize)
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("Provider already initialized");
+                .isInstanceOf(InvalidConfigurationException.class)
+                .hasMessageContaining("Provider is already running");
     }
 
     @Test
@@ -68,8 +68,8 @@ class AwsCloudProviderTest {
         provider.shutdown();
 
         assertThatThrownBy(provider::shutdown)
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("Provider already shutdown");
+                .isInstanceOf(ProviderUnavailableException.class)
+                .hasMessageContaining("Provider is already shut down");
     }
 
     @Test

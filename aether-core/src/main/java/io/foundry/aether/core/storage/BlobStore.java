@@ -22,7 +22,7 @@ public interface BlobStore extends CloudService {
 
     ListBlobsResponse list(ListBlobsRequest request);
 
-    BlobMetadata delete(BlobRef ref);
+    void delete(BlobRef ref);
 
     boolean exists(BlobRef ref);
 

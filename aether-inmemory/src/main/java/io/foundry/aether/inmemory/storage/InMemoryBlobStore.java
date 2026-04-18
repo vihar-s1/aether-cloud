@@ -70,9 +70,8 @@ public class InMemoryBlobStore implements BlobStore {
     }
 
     @Override
-    public BlobMetadata delete(BlobRef ref) {
-        StoredBlob blob = store.remove(ref);
-        return blob == null ? null : blob.metadata();
+    public void delete(BlobRef ref) {
+        store.remove(ref);
     }
 
     @Override

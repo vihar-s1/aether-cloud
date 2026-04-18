@@ -8,6 +8,7 @@ package io.foundry.aether.aws;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.ProviderStatus;
 import io.foundry.aether.core.exception.InvalidConfigurationException;
+import io.foundry.aether.core.exception.ProviderUnavailableException;
 
 public class AwsCloudProvider implements CloudProvider {
 
@@ -38,8 +39,11 @@ public class AwsCloudProvider implements CloudProvider {
 
     @Override
     public void initialize() {
-        if (status != ProviderStatus.INITIALIZED) {
-            throw new IllegalStateException("Provider already initialized");
+        if (status == ProviderStatus.SHUTDOWN) {
+            throw new InvalidConfigurationException(PROVIDER_NAME, "initialize", "Provider has been shut down");
+        }
+        if (status == ProviderStatus.RUNNING) {
+            throw new InvalidConfigurationException(PROVIDER_NAME, "initialize", "Provider is already running");
         }
         status = ProviderStatus.RUNNING;
     }
@@ -47,7 +51,7 @@ public class AwsCloudProvider implements CloudProvider {
     @Override
     public void shutdown() {
         if (status == ProviderStatus.SHUTDOWN) {
-            throw new IllegalStateException("Provider already shutdown");
+            throw new ProviderUnavailableException(PROVIDER_NAME, "shutdown", "Provider is already shut down");
         }
         status = ProviderStatus.SHUTDOWN;
     }

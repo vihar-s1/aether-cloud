@@ -5,8 +5,8 @@
 
 package io.foundry.aether.nfs.storage;
 
-import static io.foundry.aether.nfs.internal.NSFUtils.toPath;
-import static io.foundry.aether.nfs.internal.NSFUtils.wrapIOException;
+import static io.foundry.aether.nfs.internal.NFSUtils.toPath;
+import static io.foundry.aether.nfs.internal.NFSUtils.wrapIOException;
 
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.exception.*;
@@ -102,18 +102,9 @@ public class NFSBlobStore implements BlobStore {
     }
 
     @Override
-    public BlobMetadata delete(BlobRef ref) {
+    public void delete(BlobRef ref) {
         try {
-            Path path = toPath(provider, ref);
-            if (!Files.exists(path)) {
-                return null;
-            }
-            BlobMetadata blob = new BlobMetadata(
-                    ref.bucket(), ref.key(),
-                    Files.size(path), Files.probeContentType(path),
-                    System.currentTimeMillis(), Map.of());
-            Files.delete(path);
-            return blob;
+            Files.deleteIfExists(toPath(provider, ref));
         } catch (IOException e) {
             throw wrapIOException(e, "delete", ref);
         }

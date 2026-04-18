@@ -54,9 +54,9 @@ public class AwsSecretsManager implements SecretManager {
                     GetSecretValueRequest.builder().secretId(secretId).build());
             return new SecretValue(
                     secretId,
-                    _decryptSecretString(response.secretBinary()),
+                    _extractSecretValue(response),
                     response.versionId(),
-                    response.createdDate().toEpochMilli());
+                    response.createdDate() != null ? response.createdDate().toEpochMilli() : 0L);
         } catch (software.amazon.awssdk.services.secretsmanager.model.ResourceNotFoundException e) {
             throw new ResourceNotFoundException(provider.name(), "getSecret", SECRET, secretId);
         }
@@ -85,7 +85,7 @@ public class AwsSecretsManager implements SecretManager {
                     existing.name(),
                     null,
                     response.versionId(),
-                    existing.createdDate().toEpochMilli(),
+                    existing.createdDate() != null ? existing.createdDate().toEpochMilli() : 0L,
                     System.currentTimeMillis());
         } catch (software.amazon.awssdk.services.secretsmanager.model.ResourceNotFoundException e) {
             throw new ResourceNotFoundException(provider.name(), "updateSecret", SECRET, secretId);
@@ -97,15 +97,16 @@ public class AwsSecretsManager implements SecretManager {
         try {
             GetSecretValueResponse response = secretsClient.getSecretValue(
                     GetSecretValueRequest.builder().secretId(secretId).build());
+            String currentValue = _extractSecretValue(response);
             PutSecretValueResponse rotateResponse = secretsClient.putSecretValue(PutSecretValueRequest.builder()
                     .secretId(secretId)
-                    .secretBinary(response.secretBinary())
+                    .secretBinary(_encryptSecretString(currentValue))
                     .build());
             return new SecretValue(
                     secretId,
-                    _decryptSecretString(response.secretBinary()),
+                    currentValue,
                     rotateResponse.versionId(),
-                    response.createdDate().toEpochMilli());
+                    response.createdDate() != null ? response.createdDate().toEpochMilli() : 0L);
         } catch (software.amazon.awssdk.services.secretsmanager.model.ResourceNotFoundException e) {
             throw new ResourceNotFoundException(provider.name(), "rotate", SECRET, secretId);
         }
@@ -130,8 +131,12 @@ public class AwsSecretsManager implements SecretManager {
         return response.secretList().stream().map(this::_entryToMetadata).toList();
     }
 
-    private String _decryptSecretString(SdkBytes secretBinary) {
-        return secretBinary.asUtf8String();
+    /** Extracts the secret value from the response, handling both string and binary formats. */
+    private String _extractSecretValue(GetSecretValueResponse response) {
+        if (response.secretBinary() != null) {
+            return response.secretBinary().asUtf8String();
+        }
+        return response.secretString();
     }
 
     private SdkBytes _encryptSecretString(String secretString) {

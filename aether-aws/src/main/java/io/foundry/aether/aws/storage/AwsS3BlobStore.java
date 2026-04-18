@@ -132,17 +132,15 @@ public class AwsS3BlobStore implements BlobStore {
     }
 
     @Override
-    public BlobMetadata delete(BlobRef ref) {
-        var deleteRequest = DeleteObjectRequest.builder()
-                .bucket(ref.bucket())
-                .key(ref.key())
-                .build();
+    public void delete(BlobRef ref) {
         try {
-            s3Client.deleteObject(deleteRequest);
+            s3Client.deleteObject(DeleteObjectRequest.builder()
+                    .bucket(ref.bucket())
+                    .key(ref.key())
+                    .build());
         } catch (AwsServiceException | SdkClientException e) {
             throw AwsUtils.wrapS3Exception(e, "delete", BlobStore.BLOB, ref.getId());
         }
-        return new BlobMetadata(ref.bucket(), ref.key(), 0, null, 0, null);
     }
 
     @Override
