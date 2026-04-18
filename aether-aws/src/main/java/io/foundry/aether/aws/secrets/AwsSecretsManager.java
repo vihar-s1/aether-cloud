@@ -6,16 +6,16 @@
 package io.foundry.aether.aws.secrets;
 
 import io.foundry.aether.aws.AwsCloudProvider;
+import io.foundry.aether.aws.internal.AwsUtils;
 import io.foundry.aether.core.CloudProvider;
-import io.foundry.aether.core.exception.ResourceNotFoundException;
+import io.foundry.aether.core.exception.CloudErrorCodes;
 import io.foundry.aether.core.secrets.SecretManager;
 import io.foundry.aether.core.secrets.SecretMetadata;
 import io.foundry.aether.core.secrets.SecretValue;
 import java.util.List;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.SdkBytes;
-import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.services.secretsmanager.model.CreateSecretRequest;
 import software.amazon.awssdk.services.secretsmanager.model.CreateSecretResponse;
@@ -35,11 +35,7 @@ public class AwsSecretsManager implements SecretManager {
 
     public AwsSecretsManager(AwsCloudProvider provider) {
         this.provider = provider;
-        secretsClient = SecretsManagerClient.builder()
-                .region(Region.of(provider.region()))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create(provider.accessKey(), provider.secretKey())))
-                .build();
+        this.secretsClient = AwsUtils.applyCommonConfig(SecretsManagerClient.builder(), provider).build();
     }
 
     @Override
@@ -50,88 +46,76 @@ public class AwsSecretsManager implements SecretManager {
     @Override
     public SecretValue getSecret(String secretId) {
         try {
-            GetSecretValueResponse response = secretsClient.getSecretValue(
-                    GetSecretValueRequest.builder().secretId(secretId).build());
-            return new SecretValue(
-                    secretId,
-                    _extractSecretValue(response),
-                    response.versionId(),
+            GetSecretValueResponse response = secretsClient
+                    .getSecretValue(GetSecretValueRequest.builder().secretId(secretId).build());
+            return new SecretValue(secretId, _extractSecretValue(response), response.versionId(),
                     response.createdDate() != null ? response.createdDate().toEpochMilli() : 0L);
-        } catch (software.amazon.awssdk.services.secretsmanager.model.ResourceNotFoundException e) {
-            throw new ResourceNotFoundException(provider.name(), "getSecret", SECRET, secretId);
+        } catch (AwsServiceException | SdkClientException e) {
+            throw AwsUtils.wrapAwsException(e, "getSecret", SECRET, secretId, CloudErrorCodes.SECRET_NOT_FOUND);
         }
     }
 
     @Override
     public SecretMetadata createSecret(String secretId, String value) {
-        CreateSecretResponse response = secretsClient.createSecret(CreateSecretRequest.builder()
-                .name(secretId)
-                .secretBinary(_encryptSecretString(value))
-                .build());
-        return new SecretMetadata(secretId, secretId, null, response.versionId(), System.currentTimeMillis(), 0L);
+        try {
+            CreateSecretResponse response = secretsClient
+                    .createSecret(CreateSecretRequest.builder().name(secretId).secretBinary(_toBytes(value)).build());
+            return new SecretMetadata(secretId, secretId, null, response.versionId(), System.currentTimeMillis(), 0L);
+        } catch (AwsServiceException | SdkClientException e) {
+            throw AwsUtils.wrapAwsException(e, "createSecret", SECRET, secretId, CloudErrorCodes.SECRET_NOT_FOUND);
+        }
     }
 
     @Override
     public SecretMetadata updateSecret(String secretId, String value) {
         try {
-            GetSecretValueResponse existing = secretsClient.getSecretValue(
-                    GetSecretValueRequest.builder().secretId(secretId).build());
-            PutSecretValueResponse response = secretsClient.putSecretValue(PutSecretValueRequest.builder()
-                    .secretId(secretId)
-                    .secretBinary(_encryptSecretString(value))
-                    .build());
-            return new SecretMetadata(
-                    secretId,
-                    existing.name(),
-                    null,
-                    response.versionId(),
+            GetSecretValueResponse existing = secretsClient
+                    .getSecretValue(GetSecretValueRequest.builder().secretId(secretId).build());
+            PutSecretValueResponse response = secretsClient.putSecretValue(
+                    PutSecretValueRequest.builder().secretId(secretId).secretBinary(_toBytes(value)).build());
+            return new SecretMetadata(secretId, existing.name(), null, response.versionId(),
                     existing.createdDate() != null ? existing.createdDate().toEpochMilli() : 0L,
                     System.currentTimeMillis());
-        } catch (software.amazon.awssdk.services.secretsmanager.model.ResourceNotFoundException e) {
-            throw new ResourceNotFoundException(provider.name(), "updateSecret", SECRET, secretId);
+        } catch (AwsServiceException | SdkClientException e) {
+            throw AwsUtils.wrapAwsException(e, "updateSecret", SECRET, secretId, CloudErrorCodes.SECRET_NOT_FOUND);
         }
     }
 
     @Override
     public SecretValue rotate(String secretId) {
         try {
-            GetSecretValueResponse response = secretsClient.getSecretValue(
-                    GetSecretValueRequest.builder().secretId(secretId).build());
+            GetSecretValueResponse response = secretsClient
+                    .getSecretValue(GetSecretValueRequest.builder().secretId(secretId).build());
             String currentValue = _extractSecretValue(response);
-            PutSecretValueResponse rotateResponse = secretsClient.putSecretValue(PutSecretValueRequest.builder()
-                    .secretId(secretId)
-                    .secretBinary(_encryptSecretString(currentValue))
-                    .build());
-            return new SecretValue(
-                    secretId,
-                    currentValue,
-                    rotateResponse.versionId(),
+            PutSecretValueResponse rotateResponse = secretsClient.putSecretValue(
+                    PutSecretValueRequest.builder().secretId(secretId).secretBinary(_toBytes(currentValue)).build());
+            return new SecretValue(secretId, currentValue, rotateResponse.versionId(),
                     response.createdDate() != null ? response.createdDate().toEpochMilli() : 0L);
-        } catch (software.amazon.awssdk.services.secretsmanager.model.ResourceNotFoundException e) {
-            throw new ResourceNotFoundException(provider.name(), "rotate", SECRET, secretId);
+        } catch (AwsServiceException | SdkClientException e) {
+            throw AwsUtils.wrapAwsException(e, "rotate", SECRET, secretId, CloudErrorCodes.SECRET_NOT_FOUND);
         }
     }
 
     @Override
     public void deleteSecret(String secretId) {
         try {
-            secretsClient.deleteSecret(DeleteSecretRequest.builder()
-                    .secretId(secretId)
-                    .forceDeleteWithoutRecovery(true)
-                    .build());
-        } catch (software.amazon.awssdk.services.secretsmanager.model.ResourceNotFoundException e) {
-            throw new ResourceNotFoundException(provider.name(), "deleteSecret", SECRET, secretId);
+            secretsClient.deleteSecret(
+                    DeleteSecretRequest.builder().secretId(secretId).forceDeleteWithoutRecovery(true).build());
+        } catch (AwsServiceException | SdkClientException e) {
+            throw AwsUtils.wrapAwsException(e, "deleteSecret", SECRET, secretId, CloudErrorCodes.SECRET_NOT_FOUND);
         }
     }
 
     @Override
     public List<SecretMetadata> listSecrets() {
-        ListSecretsResponse response =
-                secretsClient.listSecrets(ListSecretsRequest.builder().build());
-        return response.secretList().stream().map(this::_entryToMetadata).toList();
+        try {
+            ListSecretsResponse response = secretsClient.listSecrets(ListSecretsRequest.builder().build());
+            return response.secretList().stream().map(this::_entryToMetadata).toList();
+        } catch (AwsServiceException | SdkClientException e) {
+            throw AwsUtils.wrapAwsException(e, "listSecrets", SECRET, null, CloudErrorCodes.SECRET_NOT_FOUND);
+        }
     }
 
-    /** Extracts the secret value from the response, handling both string and binary formats. */
     private String _extractSecretValue(GetSecretValueResponse response) {
         if (response.secretBinary() != null) {
             return response.secretBinary().asUtf8String();
@@ -139,14 +123,13 @@ public class AwsSecretsManager implements SecretManager {
         return response.secretString();
     }
 
-    private SdkBytes _encryptSecretString(String secretString) {
-        return SdkBytes.fromUtf8String(secretString);
+    private SdkBytes _toBytes(String value) {
+        return SdkBytes.fromUtf8String(value);
     }
 
     private SecretMetadata _entryToMetadata(SecretListEntry entry) {
         long createdAt = entry.createdDate() != null ? entry.createdDate().toEpochMilli() : 0L;
-        long lastRotated =
-                entry.lastRotatedDate() != null ? entry.lastRotatedDate().toEpochMilli() : 0L;
+        long lastRotated = entry.lastRotatedDate() != null ? entry.lastRotatedDate().toEpochMilli() : 0L;
         return new SecretMetadata(entry.name(), entry.name(), entry.description(), null, createdAt, lastRotated);
     }
 }

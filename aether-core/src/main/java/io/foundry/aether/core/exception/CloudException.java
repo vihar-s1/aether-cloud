@@ -6,24 +6,16 @@
 package io.foundry.aether.core.exception;
 
 public abstract sealed class CloudException extends RuntimeException
-        permits AuthenticationException,
-                ResourceNotFoundException,
-                QuotaExceededException,
-                ProviderUnavailableException,
-                InvalidConfigurationException,
-                GenericCloudException {
+        permits AuthenticationException, PermissionDeniedException, ResourceNotFoundException,
+        ResourceExhaustedException, QuotaExceededException, ProviderUnavailableException, InvalidConfigurationException,
+        OperationNotSupportedException, GenericCloudException {
 
     private final String providerName;
     private final String operation;
     private final String errorCode;
     private final boolean retryable;
 
-    protected CloudException(
-            String providerName,
-            String operation,
-            String errorCode,
-            boolean retryable,
-            String message,
+    protected CloudException(String providerName, String operation, String errorCode, boolean retryable, String message,
             Throwable cause) {
         super("[" + providerName + "/" + operation + "] " + message, cause);
         this.providerName = providerName;

@@ -63,7 +63,7 @@ class AetherJavaConventionPlugin : Plugin<Project> {
 
 """
                 )
-                palantirJavaFormat("2.38.0")
+                eclipse().configFile("${project.rootDir}/configs/eclipse-formatter.xml")
                 removeUnusedImports()
                 trimTrailingWhitespace()
                 endWithNewline()

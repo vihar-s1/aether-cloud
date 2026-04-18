@@ -10,6 +10,8 @@ import java.util.List;
 
 public interface ComputeEngine extends CloudService {
 
+    String INSTANCE = "instance";
+
     default String serviceName() {
         return "compute-engine";
     }

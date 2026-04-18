@@ -6,16 +6,20 @@
 package io.foundry.aether.aws.compute;
 
 import io.foundry.aether.aws.AwsCloudProvider;
+import io.foundry.aether.aws.internal.AwsUtils;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.compute.ComputeEngine;
 import io.foundry.aether.core.compute.InstanceConfig;
 import io.foundry.aether.core.compute.InstanceInfo;
 import io.foundry.aether.core.compute.InstanceState;
+import io.foundry.aether.core.exception.CloudErrorCodes;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.regions.Region;
+import java.util.Map;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.ec2.Ec2Client;
 import software.amazon.awssdk.services.ec2.model.DescribeInstancesRequest;
 import software.amazon.awssdk.services.ec2.model.DescribeInstancesResponse;
@@ -33,11 +37,7 @@ public class AwsEc2ComputeEngine implements ComputeEngine {
 
     public AwsEc2ComputeEngine(AwsCloudProvider provider) {
         this.provider = provider;
-        ec2Client = Ec2Client.builder()
-                .region(Region.of(provider.region()))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create(provider.accessKey(), provider.secretKey())))
-                .build();
+        this.ec2Client = AwsUtils.applyCommonConfig(Ec2Client.builder(), provider).build();
     }
 
     @Override
@@ -47,83 +47,77 @@ public class AwsEc2ComputeEngine implements ComputeEngine {
 
     @Override
     public InstanceInfo createInstance(InstanceConfig config) {
-        RunInstancesResponse response = ec2Client.runInstances(RunInstancesRequest.builder()
-                .imageId(config.imageId())
-                .instanceType(config.instanceType())
-                .minCount(1)
-                .maxCount(1)
-                .tagSpecifications(_buildTagSpecifications(config.name(), config.tags()))
-                .build());
-
-        Instance instance = response.instances().getFirst();
-        return _instanceToInfo(instance);
+        try {
+            RunInstancesResponse response = ec2Client.runInstances(RunInstancesRequest.builder()
+                    .imageId(config.imageId()).instanceType(config.instanceType()).minCount(1).maxCount(1)
+                    .tagSpecifications(_buildTagSpecifications(config.name(), config.tags())).build());
+            return _instanceToInfo(response.instances().getFirst());
+        } catch (AwsServiceException | SdkClientException e) {
+            throw AwsUtils.wrapAwsException(e, "createInstance", INSTANCE, config.name(),
+                    CloudErrorCodes.COMPUTE_NOT_FOUND);
+        }
     }
 
     @Override
     public void terminateInstance(String instanceId) {
-        ec2Client.terminateInstances(
-                TerminateInstancesRequest.builder().instanceIds(instanceId).build());
+        try {
+            ec2Client.terminateInstances(TerminateInstancesRequest.builder().instanceIds(instanceId).build());
+        } catch (AwsServiceException | SdkClientException e) {
+            throw AwsUtils.wrapAwsException(e, "terminateInstance", INSTANCE, instanceId,
+                    CloudErrorCodes.COMPUTE_NOT_FOUND);
+        }
     }
 
     @Override
     public InstanceInfo getInstance(String instanceId) {
-        DescribeInstancesResponse response = ec2Client.describeInstances(
-                DescribeInstancesRequest.builder().instanceIds(instanceId).build());
-
-        if (response.reservations().isEmpty()
-                || response.reservations().get(0).instances().isEmpty()) {
-            throw new ResourceNotFoundException(provider.name(), "getInstance", "instance", instanceId);
+        DescribeInstancesResponse response;
+        try {
+            response = ec2Client.describeInstances(DescribeInstancesRequest.builder().instanceIds(instanceId).build());
+        } catch (AwsServiceException | SdkClientException e) {
+            throw AwsUtils.wrapAwsException(e, "getInstance", INSTANCE, instanceId, CloudErrorCodes.COMPUTE_NOT_FOUND);
         }
-
-        Instance instance = response.reservations().get(0).instances().get(0);
-        return _instanceToInfo(instance);
+        if (response.reservations().isEmpty() || response.reservations().get(0).instances().isEmpty()) {
+            throw new ResourceNotFoundException(provider.name(), "getInstance", INSTANCE, instanceId, null,
+                    CloudErrorCodes.COMPUTE_NOT_FOUND);
+        }
+        return _instanceToInfo(response.reservations().get(0).instances().get(0));
     }
 
     @Override
     public List<InstanceInfo> listInstances() {
-        DescribeInstancesResponse response =
-                ec2Client.describeInstances(DescribeInstancesRequest.builder().build());
-
-        return response.reservations().stream()
-                .flatMap(reservation -> reservation.instances().stream())
-                .map(this::_instanceToInfo)
-                .toList();
+        try {
+            DescribeInstancesResponse response = ec2Client
+                    .describeInstances(DescribeInstancesRequest.builder().build());
+            return response.reservations().stream().flatMap(reservation -> reservation.instances().stream())
+                    .map(this::_instanceToInfo).toList();
+        } catch (AwsServiceException | SdkClientException e) {
+            throw AwsUtils.wrapAwsException(e, "listInstances", INSTANCE, null, CloudErrorCodes.COMPUTE_NOT_FOUND);
+        }
     }
 
-    private TagSpecification _buildTagSpecifications(String name, java.util.Map<String, String> tags) {
-        java.util.List<Tag> tagList = new java.util.ArrayList<>();
+    private TagSpecification _buildTagSpecifications(String name, Map<String, String> tags) {
+        List<Tag> tagList = new ArrayList<>();
         tagList.add(Tag.builder().key("Name").value(name).build());
-
         if (tags != null) {
-            tags.forEach((key, value) ->
-                    tagList.add(Tag.builder().key(key).value(value).build()));
+            tags.forEach((key, value) -> tagList.add(Tag.builder().key(key).value(value).build()));
         }
-
         return TagSpecification.builder().resourceType("instance").tags(tagList).build();
     }
 
     private InstanceInfo _instanceToInfo(Instance instance) {
-        String name = instance.tags().stream()
-                .filter(tag -> "Name".equals(tag.key()))
-                .map(Tag::value)
-                .findFirst()
+        String name = instance.tags().stream().filter(tag -> "Name".equals(tag.key())).map(Tag::value).findFirst()
                 .orElse(instance.instanceId());
 
-        java.util.Map<String, String> tags = new java.util.HashMap<>();
+        Map<String, String> tags = new HashMap<>();
         instance.tags().forEach(tag -> {
             if (!"Name".equals(tag.key())) {
                 tags.put(tag.key(), tag.value());
             }
         });
 
-        return new InstanceInfo(
-                instance.instanceId(),
-                name,
-                _mapInstanceState(instance.state().nameAsString()),
-                instance.publicIpAddress(),
-                instance.privateIpAddress(),
-                instance.launchTime() != null ? instance.launchTime().toEpochMilli() : 0L,
-                tags);
+        return new InstanceInfo(instance.instanceId(), name, _mapInstanceState(instance.state().nameAsString()),
+                instance.publicIpAddress(), instance.privateIpAddress(),
+                instance.launchTime() != null ? instance.launchTime().toEpochMilli() : 0L, tags);
     }
 
     private InstanceState _mapInstanceState(String awsState) {
