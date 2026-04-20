@@ -2,22 +2,23 @@ package io.foundry.aether
 
 object AetherVersions {
     // Core dependencies
-    const val SLF4J = "2.0.9"
-    const val GUAVA = "33.0.0-jre"
-    const val JACKSON = "2.16.1"
-    const val COMMONS_LANG3 = "3.14.0"
+    const val SLF4J = "2.0.17"
+    const val GUAVA = "33.4.8-jre"
+    const val JACKSON = "2.19.0"
+    const val COMMONS_LANG3 = "3.20.0"
 
     // Cloud SDKs
-    const val AWS_SDK = "2.24.0"
+    const val AWS_SDK = "2.34.0"
     const val GCP_LIBRARIES_BOM = "26.32.0"
     const val GCP_STORAGE = "2.30.0"
     const val AZURE_CORE = "1.45.0"
 
     // Testing
-    const val JUNIT = "5.10.1"
-    const val JUNIT_PLATFORM_LAUNCHER = "1.10.1"
-    const val MOCKITO = "5.8.0"
-    const val ASSERTJ = "3.25.1"
+    const val JUNIT = "5.12.2"
+    const val JUNIT_PLATFORM_LAUNCHER = "1.12.2"
+    const val MOCKITO = "5.18.0"
+    const val ASSERTJ = "3.27.3"
+    const val TESTCONTAINERS = "2.0.4"
 }
 
 object AetherLibs {
