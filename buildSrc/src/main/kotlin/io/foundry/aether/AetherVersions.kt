@@ -39,6 +39,9 @@ object AetherLibs {
     // Azure
     const val AZURE_CORE = "com.azure:azure-core:${AetherVersions.AZURE_CORE}"
 
+    const val JACKSON_YAML =
+        "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${AetherVersions.JACKSON}"
+
     // Testing
     const val JUNIT_JUPITER = "org.junit.jupiter:junit-jupiter:${AetherVersions.JUNIT}"
     const val JUNIT_PLATFORM_LAUNCHER = "org.junit.platform:junit-platform-launcher:${AetherVersions.JUNIT_PLATFORM_LAUNCHER}"

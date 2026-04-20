@@ -1,0 +1,3 @@
+io.foundry.aether.aws.config.AwsBlobStoreFactory
+io.foundry.aether.aws.config.AwsSecretManagerFactory
+io.foundry.aether.aws.config.AwsComputeEngineFactory

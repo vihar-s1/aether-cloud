@@ -94,6 +94,9 @@ open class AetherLibsExtension {
     // Azure
     val azureCore = AetherLibs.AZURE_CORE
 
+    // Extras
+    val jacksonYaml = AetherLibs.JACKSON_YAML
+
     // Testing
     val junitJupiter = AetherLibs.JUNIT_JUPITER
     val junitPlatformLauncher = AetherLibs.JUNIT_PLATFORM_LAUNCHER

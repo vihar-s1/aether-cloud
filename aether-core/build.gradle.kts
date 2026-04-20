@@ -6,6 +6,8 @@ plugins {
 description = "Core abstractions for the Aether multi-cloud framework"
 
 dependencies {
+    api(aetherLibs.jacksonYaml)
+
     testFixturesImplementation(aetherLibs.junitJupiter)
     testFixturesImplementation(aetherLibs.assertjCore)
 }

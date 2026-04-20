@@ -5,6 +5,7 @@
 
 package io.foundry.aether.aws;
 
+import io.foundry.aether.aws.config.AwsProviderConfig;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.ProviderStatus;
 import io.foundry.aether.core.exception.InvalidConfigurationException;
@@ -19,6 +20,10 @@ public class AwsCloudProvider implements CloudProvider {
     private final String endpoint;
     private final String region;
     private volatile ProviderStatus status = ProviderStatus.INITIALIZED;
+
+    public AwsCloudProvider(AwsProviderConfig config) {
+        this(config.accessKey(), config.secretKey(), config.endpoint().orElse(null), config.region());
+    }
 
     public AwsCloudProvider(String accessKey, String secretKey, String endpoint, String region) {
         this.accessKey = nullSafe(accessKey, "accessKey");

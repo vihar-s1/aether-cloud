@@ -9,6 +9,7 @@ import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.ProviderStatus;
 import io.foundry.aether.core.exception.InvalidConfigurationException;
 import io.foundry.aether.core.exception.ProviderUnavailableException;
+import io.foundry.aether.nfs.config.NfsProviderConfig;
 
 public class NFSCloudProvider implements CloudProvider {
 
@@ -18,6 +19,10 @@ public class NFSCloudProvider implements CloudProvider {
 
     public NFSCloudProvider(String basePath) {
         this.basePath = basePath;
+    }
+
+    public NFSCloudProvider(NfsProviderConfig config) {
+        this(config.rootPath().toString());
     }
 
     public String basePath() {
