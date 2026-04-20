@@ -14,7 +14,6 @@ import io.foundry.aether.core.secrets.SecretMetadata;
 import io.foundry.aether.core.secrets.SecretValue;
 import java.util.List;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
-import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.services.secretsmanager.model.CreateSecretRequest;
@@ -59,7 +58,7 @@ public class AwsSecretsManager implements SecretManager {
     public SecretMetadata createSecret(String secretId, String value) {
         try {
             CreateSecretResponse response = secretsClient
-                    .createSecret(CreateSecretRequest.builder().name(secretId).secretBinary(_toBytes(value)).build());
+                    .createSecret(CreateSecretRequest.builder().name(secretId).secretString(value).build());
             return new SecretMetadata(secretId, secretId, null, response.versionId(), System.currentTimeMillis(), 0L);
         } catch (AwsServiceException | SdkClientException e) {
             throw AwsUtils.wrapAwsException(e, "createSecret", SECRET, secretId, CloudErrorCodes.SECRET_NOT_FOUND);
@@ -71,8 +70,8 @@ public class AwsSecretsManager implements SecretManager {
         try {
             GetSecretValueResponse existing = secretsClient
                     .getSecretValue(GetSecretValueRequest.builder().secretId(secretId).build());
-            PutSecretValueResponse response = secretsClient.putSecretValue(
-                    PutSecretValueRequest.builder().secretId(secretId).secretBinary(_toBytes(value)).build());
+            PutSecretValueResponse response = secretsClient
+                    .putSecretValue(PutSecretValueRequest.builder().secretId(secretId).secretString(value).build());
             return new SecretMetadata(secretId, existing.name(), null, response.versionId(),
                     existing.createdDate() != null ? existing.createdDate().toEpochMilli() : 0L,
                     System.currentTimeMillis());
@@ -88,7 +87,7 @@ public class AwsSecretsManager implements SecretManager {
                     .getSecretValue(GetSecretValueRequest.builder().secretId(secretId).build());
             String currentValue = _extractSecretValue(response);
             PutSecretValueResponse rotateResponse = secretsClient.putSecretValue(
-                    PutSecretValueRequest.builder().secretId(secretId).secretBinary(_toBytes(currentValue)).build());
+                    PutSecretValueRequest.builder().secretId(secretId).secretString(currentValue).build());
             return new SecretValue(secretId, currentValue, rotateResponse.versionId(),
                     response.createdDate() != null ? response.createdDate().toEpochMilli() : 0L);
         } catch (AwsServiceException | SdkClientException e) {
@@ -117,14 +116,10 @@ public class AwsSecretsManager implements SecretManager {
     }
 
     private String _extractSecretValue(GetSecretValueResponse response) {
-        if (response.secretBinary() != null) {
-            return response.secretBinary().asUtf8String();
+        if (response.secretString() != null) {
+            return response.secretString();
         }
-        return response.secretString();
-    }
-
-    private SdkBytes _toBytes(String value) {
-        return SdkBytes.fromUtf8String(value);
+        return response.secretBinary() != null ? response.secretBinary().asUtf8String() : null;
     }
 
     private SecretMetadata _entryToMetadata(SecretListEntry entry) {

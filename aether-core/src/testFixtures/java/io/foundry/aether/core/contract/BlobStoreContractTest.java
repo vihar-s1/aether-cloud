@@ -23,7 +23,7 @@ public abstract class BlobStoreContractTest {
     private BlobStore store;
 
     @BeforeEach
-    void setUp() {
+    protected void setUp() {
         this.store = createBlobStore();
     }
 
@@ -50,30 +50,30 @@ public abstract class BlobStoreContractTest {
 
     @Test
     void uploadThenExists_returnsTrue() {
-        store.upload(UploadBlobRequest.of("b", "key", new byte[0], "text/plain"));
-        assertThat(store.exists(new BlobRef("b", "key"))).isTrue();
+        store.upload(UploadBlobRequest.of("bkt", "key", new byte[0], "text/plain"));
+        assertThat(store.exists(new BlobRef("bkt", "key"))).isTrue();
     }
 
     @Test
     void deleteThenExists_returnsFalse() {
-        store.upload(UploadBlobRequest.of("b", "key", new byte[0], "text/plain"));
-        store.delete(new BlobRef("b", "key"));
-        assertThat(store.exists(new BlobRef("b", "key"))).isFalse();
+        store.upload(UploadBlobRequest.of("bkt", "key", new byte[0], "text/plain"));
+        store.delete(new BlobRef("bkt", "key"));
+        assertThat(store.exists(new BlobRef("bkt", "key"))).isFalse();
     }
 
     @Test
     void downloadNonexistent_throws() {
-        assertThatThrownBy(() -> store.download(new BlobRef("b", "missing")))
+        assertThatThrownBy(() -> store.download(new BlobRef("bkt", "missing")))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
     void listWithPrefix_returnsOnlyMatching() {
-        store.upload(UploadBlobRequest.of("b", "logs/a.txt", new byte[0], "text/plain"));
-        store.upload(UploadBlobRequest.of("b", "logs/b.txt", new byte[0], "text/plain"));
-        store.upload(UploadBlobRequest.of("b", "data/c.txt", new byte[0], "text/plain"));
+        store.upload(UploadBlobRequest.of("bkt", "logs/a.txt", new byte[0], "text/plain"));
+        store.upload(UploadBlobRequest.of("bkt", "logs/b.txt", new byte[0], "text/plain"));
+        store.upload(UploadBlobRequest.of("bkt", "data/c.txt", new byte[0], "text/plain"));
 
-        var result = store.list(new ListBlobsRequest("b", "logs/", null));
+        var result = store.list(new ListBlobsRequest("bkt", "logs/", null));
         assertThat(result.blobs()).hasSize(2);
         assertThat(result.blobs()).allSatisfy(m -> assertThat(m.key()).startsWith("logs/"));
     }
@@ -86,17 +86,17 @@ public abstract class BlobStoreContractTest {
 
     @Test
     void uploadOverwritesExistingKey() {
-        store.upload(UploadBlobRequest.of("b", "key", "v1".getBytes(), "text/plain"));
-        store.upload(UploadBlobRequest.of("b", "key", "v2".getBytes(), "text/plain"));
+        store.upload(UploadBlobRequest.of("bkt", "key", "v1".getBytes(), "text/plain"));
+        store.upload(UploadBlobRequest.of("bkt", "key", "v2".getBytes(), "text/plain"));
 
-        try (var content = store.download(new BlobRef("b", "key"))) {
+        try (var content = store.download(new BlobRef("bkt", "key"))) {
             assertThat(content.data()).hasContent("v2");
         }
     }
 
     @Test
     void getMetadataNonexistent_throws() {
-        assertThatThrownBy(() -> store.getMetadata(new BlobRef("b", "missing")))
+        assertThatThrownBy(() -> store.getMetadata(new BlobRef("bkt", "missing")))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 }

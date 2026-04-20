@@ -20,7 +20,7 @@ public abstract class SecretManagerContractTest {
     private SecretManager manager;
 
     @BeforeEach
-    void setUp() {
+    protected void setUp() {
         manager = createSecretManager();
     }
 

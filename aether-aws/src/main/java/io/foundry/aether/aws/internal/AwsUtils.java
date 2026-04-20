@@ -50,7 +50,16 @@ public final class AwsUtils {
             return new ResourceNotFoundException(AwsCloudProvider.PROVIDER_NAME, operation, resourceType, resourceId, e,
                     AwsErrorCodes.S3_NO_SUCH_BUCKET);
         }
+        if (e instanceof software.amazon.awssdk.services.secretsmanager.model.ResourceNotFoundException) {
+            return new ResourceNotFoundException(AwsCloudProvider.PROVIDER_NAME, operation, resourceType, resourceId, e,
+                    defaultErrorCode);
+        }
         if (e instanceof AwsServiceException awsEx) {
+            String errorCode = awsEx.awsErrorDetails() != null ? awsEx.awsErrorDetails().errorCode() : "";
+            if ("InvalidInstanceID.NotFound".equals(errorCode) || "InvalidInstanceID.Malformed".equals(errorCode)) {
+                return new ResourceNotFoundException(AwsCloudProvider.PROVIDER_NAME, operation, resourceType,
+                        resourceId, awsEx, defaultErrorCode);
+            }
             return switch (awsEx.statusCode()) {
                 case 401 -> new AuthenticationException(AwsCloudProvider.PROVIDER_NAME, operation, resourceType, awsEx);
                 case 403 ->

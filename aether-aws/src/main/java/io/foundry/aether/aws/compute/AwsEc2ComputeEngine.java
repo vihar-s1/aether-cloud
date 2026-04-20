@@ -51,10 +51,14 @@ public class AwsEc2ComputeEngine implements ComputeEngine {
             RunInstancesResponse response = ec2Client.runInstances(RunInstancesRequest.builder()
                     .imageId(config.imageId()).instanceType(config.instanceType()).minCount(1).maxCount(1)
                     .tagSpecifications(_buildTagSpecifications(config.name(), config.tags())).build());
-            return _instanceToInfo(response.instances().getFirst());
+            String instanceId = response.instances().getFirst().instanceId();
+            return _waitForState(instanceId, InstanceState.RUNNING, 30);
         } catch (AwsServiceException | SdkClientException e) {
             throw AwsUtils.wrapAwsException(e, "createInstance", INSTANCE, config.name(),
                     CloudErrorCodes.COMPUTE_NOT_FOUND);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted while waiting for instance to start", e);
         }
     }
 
@@ -89,10 +93,24 @@ public class AwsEc2ComputeEngine implements ComputeEngine {
             DescribeInstancesResponse response = ec2Client
                     .describeInstances(DescribeInstancesRequest.builder().build());
             return response.reservations().stream().flatMap(reservation -> reservation.instances().stream())
+                    .filter(i -> !i.state().nameAsString().equalsIgnoreCase("terminated")
+                            && !i.state().nameAsString().equalsIgnoreCase("shutting-down"))
                     .map(this::_instanceToInfo).toList();
         } catch (AwsServiceException | SdkClientException e) {
             throw AwsUtils.wrapAwsException(e, "listInstances", INSTANCE, null, CloudErrorCodes.COMPUTE_NOT_FOUND);
         }
+    }
+
+    private InstanceInfo _waitForState(String instanceId, InstanceState target, int maxAttempts)
+            throws InterruptedException {
+        for (int i = 0; i < maxAttempts; i++) {
+            InstanceInfo info = getInstance(instanceId);
+            if (info.state() == target) {
+                return info;
+            }
+            Thread.sleep(500);
+        }
+        return getInstance(instanceId);
     }
 
     private TagSpecification _buildTagSpecifications(String name, Map<String, String> tags) {

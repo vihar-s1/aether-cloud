@@ -23,7 +23,7 @@ public abstract class ComputeEngineContractTest {
     private ComputeEngine engine;
 
     @BeforeEach
-    void setUp() {
+    protected void setUp() {
         engine = createComputeEngine();
     }
 
@@ -62,7 +62,7 @@ public abstract class ComputeEngineContractTest {
     }
 
     @Test
-    void terminateNonexistent_throws() {
+    protected void terminateNonexistent_throws() {
         assertThatThrownBy(() -> engine.terminateInstance("no-such-id")).isInstanceOf(ResourceNotFoundException.class);
     }
 }
