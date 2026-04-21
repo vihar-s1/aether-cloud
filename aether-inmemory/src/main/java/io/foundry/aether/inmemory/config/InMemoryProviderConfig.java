@@ -8,12 +8,22 @@ package io.foundry.aether.inmemory.config;
 import io.foundry.aether.core.config.ProviderConfig;
 import io.foundry.aether.inmemory.InMemoryCloudProvider;
 
-/** Singleton config for the in-memory provider — no fields required. */
+/** Configuration for an in-memory provider instance. */
 public final class InMemoryProviderConfig implements ProviderConfig {
 
-    public static final InMemoryProviderConfig INSTANCE = new InMemoryProviderConfig();
+    private final String name;
 
-    private InMemoryProviderConfig() {
+    private InMemoryProviderConfig(String name) {
+        this.name = name;
+    }
+
+    public static InMemoryProviderConfig of(String alias) {
+        return new InMemoryProviderConfig(alias);
+    }
+
+    @Override
+    public String name() {
+        return name;
     }
 
     @Override

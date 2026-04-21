@@ -13,16 +13,23 @@ import java.util.Optional;
 /** Configuration for an AWS provider instance. */
 public final class AwsProviderConfig implements ProviderConfig {
 
+    private final String name;
     private final String accessKey;
     private final String secretKey;
     private final String region;
     private final String endpoint; // nullable — uses AWS default when absent
 
     private AwsProviderConfig(Builder b) {
+        this.name = b.name;
         this.accessKey = b.accessKey;
         this.secretKey = b.secretKey;
         this.region = b.region;
         this.endpoint = b.endpoint;
+    }
+
+    @Override
+    public String name() {
+        return name;
     }
 
     @Override
@@ -53,10 +60,16 @@ public final class AwsProviderConfig implements ProviderConfig {
 
     public static final class Builder {
 
+        private String name = AwsCloudProvider.PROVIDER_NAME;
         private String accessKey;
         private String secretKey;
         private String region;
         private String endpoint;
+
+        public Builder name(String v) {
+            this.name = v;
+            return this;
+        }
 
         public Builder accessKey(String v) {
             this.accessKey = v;

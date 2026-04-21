@@ -29,10 +29,13 @@ public final class AetherConfig {
 
     private final Map<String, ProviderConfig> providers;
     private final Map<String, String> serviceRouting; // service key → provider alias
+    private final Map<String, ProviderFactory> factories; // providerType → factory (cached)
 
-    AetherConfig(Map<String, ProviderConfig> providers, Map<String, String> serviceRouting) {
+    AetherConfig(Map<String, ProviderConfig> providers, Map<String, String> serviceRouting,
+            Map<String, ProviderFactory> factories) {
         this.providers = Map.copyOf(providers);
         this.serviceRouting = Map.copyOf(serviceRouting);
+        this.factories = Map.copyOf(factories);
     }
 
     /**
@@ -78,14 +81,13 @@ public final class AetherConfig {
 
     /**
      * Creates a service by resolving the service routing config and delegating to
-     * the appropriate {@link CloudServiceFactory}. Returns empty if no routing is
+     * the appropriate {@link ProviderFactory}. Returns empty if no routing is
      * configured for this service type.
      *
      * <p>
      * Routing is resolved from env vars (highest priority) then YAML
      * {@code services:} section.
      */
-    @SuppressWarnings("unchecked")
     public <S extends CloudService> Optional<S> createService(Class<S> serviceType) {
         String serviceKey = _serviceKey(serviceType);
         String providerAlias = serviceRouting.get(serviceKey);
@@ -97,8 +99,8 @@ public final class AetherConfig {
             throw new InvalidConfigurationException("aether", "createService",
                     "Service '" + serviceKey + "' routes to unknown provider: " + providerAlias);
         }
-        CloudServiceFactory factory = _findServiceFactory(providerConfig.providerType(), serviceType);
-        return Optional.of((S) factory.create(providerConfig));
+        ProviderFactory factory = _findProviderFactory(providerConfig.providerType());
+        return factory.createService(providerConfig, serviceType);
     }
 
     /**
@@ -112,8 +114,7 @@ public final class AetherConfig {
                 .orElseThrow(() -> new InvalidConfigurationException("aether", "requireService",
                         "No service routing configured for: " + serviceType.getSimpleName() + ". Add a 'services."
                                 + _serviceKey(serviceType) + "' entry to aether.yml or set AETHER_SERVICE_"
-                                + serviceType.getSimpleName().replaceAll("([A-Z])", "_$1").toUpperCase().substring(1)
-                                + " env var."));
+                                + _serviceKey(serviceType).replace('-', '_').toUpperCase() + " env var."));
     }
 
     /** Returns the service routing map (service key → provider alias). */
@@ -124,6 +125,11 @@ public final class AetherConfig {
     /** Returns the providers map. */
     Map<String, ProviderConfig> providers() {
         return providers;
+    }
+
+    /** Returns the cached factories map (providerType → factory). */
+    Map<String, ProviderFactory> factories() {
+        return factories;
     }
 
     /** Single-provider shortcut for simple setups. */
@@ -154,28 +160,55 @@ public final class AetherConfig {
             return this;
         }
 
+        /**
+         * Route a service key (YAML/env format) to a named provider, e.g.
+         * {@code routeByKey("blob-store", "prod-aws")}.
+         */
+        public Builder routeByKey(String serviceKey, String providerAlias) {
+            serviceRouting.put(serviceKey, providerAlias);
+            return this;
+        }
+
+        /**
+         * Build with a pre-loaded factories map (avoids ServiceLoader scan at
+         * createService time).
+         */
+        public AetherConfig build(Map<String, ProviderFactory> factories) {
+            return new AetherConfig(providers, serviceRouting, factories);
+        }
+
+        /** Build with factories loaded lazily on first {@code createService()} call. */
         public AetherConfig build() {
-            return new AetherConfig(providers, serviceRouting);
+            return new AetherConfig(providers, serviceRouting, AetherConfigLoader._loadProviderFactories());
         }
     }
 
-    private CloudServiceFactory _findServiceFactory(String providerType, Class<? extends CloudService> serviceType) {
-        for (CloudServiceFactory factory : ServiceLoader.load(CloudServiceFactory.class,
-                AetherConfig.class.getClassLoader())) {
-            if (factory.providerType().equals(providerType) && factory.serviceType().isAssignableFrom(serviceType)) {
-                return factory;
+    private ProviderFactory _findProviderFactory(String providerType) {
+        ProviderFactory factory = factories.get(providerType);
+        if (factory != null) {
+            return factory;
+        }
+        // Fallback: scan ServiceLoader (handles programmatic AetherConfig.of() path
+        // when factories map is empty for a provider type not known at construction)
+        for (ProviderFactory f : ServiceLoader.load(ProviderFactory.class, AetherConfig.class.getClassLoader())) {
+            if (f.providerType().equals(providerType)) {
+                return f;
             }
         }
         throw new InvalidConfigurationException("aether", "createService",
-                "No CloudServiceFactory found for provider type '" + providerType + "' and service type '"
-                        + serviceType.getSimpleName() + "'");
+                "No ProviderFactory found for provider type '" + providerType + "'");
     }
 
     /**
-     * Converts a service class to a YAML/env key, e.g. {@code BlobStore} →
-     * {@code "blob-store"}.
+     * Converts a service class to a YAML/env key using the {@link ServiceTypes}
+     * registry, e.g. {@code BlobStore} → {@code "blob-store"}.
      */
     static String _serviceKey(Class<?> serviceType) {
-        return serviceType.getSimpleName().replaceAll("([A-Z])", "-$1").toLowerCase().substring(1); // strip leading '-'
+        String registered = ServiceTypes.REGISTRY.inverse().get(serviceType);
+        if (registered != null) {
+            return registered;
+        }
+        // Fallback for unknown types: camel-case to kebab-case
+        return serviceType.getSimpleName().replaceAll("([A-Z])", "-$1").toLowerCase().substring(1);
     }
 }

@@ -12,9 +12,9 @@ import io.foundry.aether.core.exception.InvalidConfigurationException;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-class AwsProviderConfigFactoryTest {
+class AwsProviderFactoryTest {
 
-    private final AwsProviderConfigFactory factory = new AwsProviderConfigFactory();
+    private final AwsProviderFactory factory = new AwsProviderFactory();
 
     @Test
     void providerType_isAws() {
@@ -22,12 +22,13 @@ class AwsProviderConfigFactoryTest {
     }
 
     @Test
-    void create_allFieldsPresent_returnsConfig() {
+    void createConfig_allFieldsPresent_returnsConfig() {
         var props = Map.of("access-key", "AKIA123", "secret-key", "secret", "region", "us-east-1", "endpoint",
                 "http://localhost:4566");
 
-        AwsProviderConfig config = (AwsProviderConfig) factory.create(props);
+        AwsProviderConfig config = (AwsProviderConfig) factory.createConfig("prod-aws", props);
 
+        assertThat(config.name()).isEqualTo("prod-aws");
         assertThat(config.accessKey()).isEqualTo("AKIA123");
         assertThat(config.secretKey()).isEqualTo("secret");
         assertThat(config.region()).isEqualTo("us-east-1");
@@ -36,43 +37,43 @@ class AwsProviderConfigFactoryTest {
     }
 
     @Test
-    void create_endpointAbsent_returnsEmptyOptional() {
+    void createConfig_endpointAbsent_returnsEmptyOptional() {
         var props = Map.of("access-key", "AKIA123", "secret-key", "secret", "region", "us-east-1");
 
-        AwsProviderConfig config = (AwsProviderConfig) factory.create(props);
+        AwsProviderConfig config = (AwsProviderConfig) factory.createConfig("prod-aws", props);
 
         assertThat(config.endpoint()).isEmpty();
     }
 
     @Test
-    void create_missingAccessKey_throws() {
+    void createConfig_missingAccessKey_throws() {
         var props = Map.of("secret-key", "secret", "region", "us-east-1");
 
-        assertThatThrownBy(() -> factory.create(props)).isInstanceOf(InvalidConfigurationException.class)
-                .hasMessageContaining("access-key");
+        assertThatThrownBy(() -> factory.createConfig("prod-aws", props))
+                .isInstanceOf(InvalidConfigurationException.class).hasMessageContaining("access-key");
     }
 
     @Test
-    void create_missingSecretKey_throws() {
+    void createConfig_missingSecretKey_throws() {
         var props = Map.of("access-key", "AKIA123", "region", "us-east-1");
 
-        assertThatThrownBy(() -> factory.create(props)).isInstanceOf(InvalidConfigurationException.class)
-                .hasMessageContaining("secret-key");
+        assertThatThrownBy(() -> factory.createConfig("prod-aws", props))
+                .isInstanceOf(InvalidConfigurationException.class).hasMessageContaining("secret-key");
     }
 
     @Test
-    void create_missingRegion_throws() {
+    void createConfig_missingRegion_throws() {
         var props = Map.of("access-key", "AKIA123", "secret-key", "secret");
 
-        assertThatThrownBy(() -> factory.create(props)).isInstanceOf(InvalidConfigurationException.class)
-                .hasMessageContaining("region");
+        assertThatThrownBy(() -> factory.createConfig("prod-aws", props))
+                .isInstanceOf(InvalidConfigurationException.class).hasMessageContaining("region");
     }
 
     @Test
-    void create_blankRegion_throws() {
+    void createConfig_blankRegion_throws() {
         var props = Map.of("access-key", "AKIA123", "secret-key", "secret", "region", "  ");
 
-        assertThatThrownBy(() -> factory.create(props)).isInstanceOf(InvalidConfigurationException.class)
-                .hasMessageContaining("region");
+        assertThatThrownBy(() -> factory.createConfig("prod-aws", props))
+                .isInstanceOf(InvalidConfigurationException.class).hasMessageContaining("region");
     }
 }

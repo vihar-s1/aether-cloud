@@ -1,3 +1,0 @@
-io.foundry.aether.inmemory.config.InMemoryBlobStoreFactory
-io.foundry.aether.inmemory.config.InMemorySecretManagerFactory
-io.foundry.aether.inmemory.config.InMemoryComputeEngineFactory

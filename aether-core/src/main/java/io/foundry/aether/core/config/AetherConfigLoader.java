@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory;
  * </ol>
  *
  * <p>
- * Provider type discovery is delegated to {@link ProviderConfigFactory}
+ * Provider type discovery is delegated to {@link ProviderFactory}
  * implementations found via {@link ServiceLoader}.
  */
 public final class AetherConfigLoader {
@@ -59,8 +59,8 @@ public final class AetherConfigLoader {
     }
 
     static AetherConfig load(Map<String, String> env) {
-        Map<String, ProviderConfigFactory> factories = _loadProviderFactories();
-        AetherConfig result = AetherConfig.builder().build();
+        Map<String, ProviderFactory> factories = _loadProviderFactories();
+        AetherConfig result = AetherConfig.builder().build(factories);
 
         // 3. User-level config (lowest priority)
         Path userConfig = Path.of(System.getProperty("user.home"), ".aether", "config.yml");
@@ -85,7 +85,8 @@ public final class AetherConfigLoader {
 
     /** Load from a specific YAML file. Supports {@code ${VAR}} interpolation. */
     public static AetherConfig fromFile(Path yamlPath) {
-        return _fromFile(yamlPath, System.getenv(), _loadProviderFactories());
+        Map<String, ProviderFactory> factories = _loadProviderFactories();
+        return _fromFile(yamlPath, System.getenv(), factories);
     }
 
     /** Load from environment variables only. */
@@ -100,8 +101,7 @@ public final class AetherConfigLoader {
 
     // --- Internal ---
 
-    private static AetherConfig _fromFile(Path path, Map<String, String> env,
-            Map<String, ProviderConfigFactory> factories) {
+    private static AetherConfig _fromFile(Path path, Map<String, String> env, Map<String, ProviderFactory> factories) {
         try {
             String raw = Files.readString(path);
             String interpolated = _interpolate(raw, env);
@@ -112,7 +112,7 @@ public final class AetherConfigLoader {
     }
 
     @SuppressWarnings("unchecked")
-    private static AetherConfig _parseYaml(String content, Map<String, ProviderConfigFactory> factories) {
+    private static AetherConfig _parseYaml(String content, Map<String, ProviderFactory> factories) {
         try {
             Map<String, Object> root = YAML_MAPPER.readValue(content, Map.class);
             Map<String, Object> aetherSection = (Map<String, Object>) root.getOrDefault("aether", Map.of());
@@ -126,29 +126,34 @@ public final class AetherConfigLoader {
                 String alias = entry.getKey();
                 Map<String, Object> providerBlock = (Map<String, Object>) entry.getValue();
                 String type = String.valueOf(providerBlock.get("type"));
-                ProviderConfigFactory factory = factories.get(type);
+                ProviderFactory factory = factories.get(type);
                 if (factory == null) {
                     throw new InvalidConfigurationException("aether", "config.load", "Unknown provider type '" + type
                             + "' for provider '" + alias + "'. Available types: " + factories.keySet());
                 }
                 Map<String, String> props = _toStringMap(providerBlock, "type");
-                builder.provider(alias, factory.create(props));
+                builder.provider(alias, factory.createConfig(alias, props));
             }
 
-            // Parse service routing
+            // Parse service routing — store as-is, validate lazily on createService()
             Map<String, Object> servicesSection = (Map<String, Object>) aetherSection.getOrDefault("services",
                     Map.of());
             for (Map.Entry<String, Object> entry : servicesSection.entrySet()) {
-                builder.route(_serviceClass(entry.getKey()), String.valueOf(entry.getValue()));
+                String serviceKey = entry.getKey();
+                if (!ServiceTypes.REGISTRY.containsKey(serviceKey)) {
+                    log.warn("Unknown service key '{}' in config, skipping", serviceKey);
+                    continue;
+                }
+                builder.routeByKey(serviceKey, String.valueOf(entry.getValue()));
             }
 
-            return builder.build();
+            return builder.build(factories);
         } catch (IOException e) {
             throw new InvalidConfigurationException("aether", "config.load", "Failed to parse YAML config", e);
         }
     }
 
-    private static AetherConfig _fromEnv(Map<String, String> env, Map<String, ProviderConfigFactory> factories) {
+    private static AetherConfig _fromEnv(Map<String, String> env, Map<String, ProviderFactory> factories) {
         AetherConfig.Builder builder = AetherConfig.builder();
 
         // Discover provider aliases by scanning for AETHER_PROVIDER_*_TYPE
@@ -156,7 +161,6 @@ public final class AetherConfigLoader {
         for (Map.Entry<String, String> entry : env.entrySet()) {
             String key = entry.getKey();
             if (key.startsWith(PROVIDER_ENV_PREFIX) && key.endsWith("_TYPE")) {
-                // Extract alias: AETHER_PROVIDER_PROD_AWS_TYPE → PROD_AWS
                 String aliasUpper = key.substring(PROVIDER_ENV_PREFIX.length(), key.length() - "_TYPE".length());
                 providerProps.computeIfAbsent(aliasUpper, k -> new LinkedHashMap<>());
             }
@@ -176,33 +180,29 @@ public final class AetherConfigLoader {
                 continue;
             props.remove("type");
 
-            ProviderConfigFactory factory = factories.get(type);
+            ProviderFactory factory = factories.get(type);
             if (factory == null) {
                 log.warn("Unknown provider type '{}' for env alias '{}', skipping", type, aliasUpper);
                 continue;
             }
-            // Alias: PROD_AWS → prod-aws
             String alias = aliasUpper.toLowerCase().replace('_', '-');
-            builder.provider(alias, factory.create(props));
+            builder.provider(alias, factory.createConfig(alias, props));
         }
 
         // Discover service routing: AETHER_SERVICE_BLOB_STORE=prod-aws
         for (Map.Entry<String, String> entry : env.entrySet()) {
             String key = entry.getKey();
             if (key.startsWith(SERVICE_ENV_PREFIX)) {
-                String serviceKeyUpper = key.substring(SERVICE_ENV_PREFIX.length());
-                String serviceKey = serviceKeyUpper.toLowerCase().replace('_', '-');
-                Class<?> serviceClass = _serviceClassOrNull(serviceKey);
-                if (serviceClass != null) {
-                    builder.route((Class<? extends io.foundry.aether.core.CloudService>) serviceClass,
-                            entry.getValue());
+                String serviceKey = key.substring(SERVICE_ENV_PREFIX.length()).toLowerCase().replace('_', '-');
+                if (ServiceTypes.REGISTRY.containsKey(serviceKey)) {
+                    builder.routeByKey(serviceKey, entry.getValue());
                 } else {
                     log.warn("Unknown service key '{}' from env var '{}', skipping", serviceKey, key);
                 }
             }
         }
 
-        return builder.build();
+        return builder.build(factories);
     }
 
     private static String _interpolate(String raw, Map<String, String> env) {
@@ -210,7 +210,7 @@ public final class AetherConfigLoader {
         StringBuilder sb = new StringBuilder();
         while (matcher.find()) {
             String varName = matcher.group(1);
-            String defaultValue = matcher.group(2); // null if no :- present
+            String defaultValue = matcher.group(2);
             String value = env.get(varName);
             if (value == null && defaultValue == null) {
                 throw new InvalidConfigurationException("aether", "config.interpolate",
@@ -222,30 +222,29 @@ public final class AetherConfigLoader {
         return sb.toString();
     }
 
-    private static Map<String, ProviderConfigFactory> _loadProviderFactories() {
-        Map<String, ProviderConfigFactory> factories = new LinkedHashMap<>();
-        for (ProviderConfigFactory factory : ServiceLoader.load(ProviderConfigFactory.class,
+    static Map<String, ProviderFactory> _loadProviderFactories() {
+        Map<String, ProviderFactory> factories = new LinkedHashMap<>();
+        for (ProviderFactory factory : ServiceLoader.load(ProviderFactory.class,
                 AetherConfigLoader.class.getClassLoader())) {
             String type = factory.providerType();
             if (factories.containsKey(type)) {
-                log.warn("Duplicate ProviderConfigFactory for type '{}': {} overrides {}", type,
-                        factory.getClass().getName(), factories.get(type).getClass().getName());
+                log.warn("Duplicate ProviderFactory for type '{}': {} overrides {}", type, factory.getClass().getName(),
+                        factories.get(type).getClass().getName());
             }
             factories.put(type, factory);
         }
         return factories;
     }
 
-    /**
-     * Merge two configs; {@code override} wins for any provider/service key present
-     * in both.
-     */
     private static AetherConfig _merge(AetherConfig base, AetherConfig override) {
         Map<String, ProviderConfig> merged = new LinkedHashMap<>(base.providers());
         merged.putAll(override.providers());
         Map<String, String> mergedRouting = new LinkedHashMap<>(base.serviceRouting());
         mergedRouting.putAll(override.serviceRouting());
-        return new AetherConfig(merged, mergedRouting);
+        // Override factories win (both should be identical in practice)
+        Map<String, ProviderFactory> mergedFactories = new LinkedHashMap<>(base.factories());
+        mergedFactories.putAll(override.factories());
+        return new AetherConfig(merged, mergedRouting, mergedFactories);
     }
 
     private static Map<String, String> _toStringMap(Map<String, Object> source, String... excludeKeys) {
@@ -257,24 +256,5 @@ public final class AetherConfigLoader {
             }
         }
         return result;
-    }
-
-    /** Resolves a YAML service key back to a Class — only known service types. */
-    private static Class<? extends io.foundry.aether.core.CloudService> _serviceClass(String serviceKey) {
-        Class<?> cls = _serviceClassOrNull(serviceKey);
-        if (cls == null) {
-            throw new InvalidConfigurationException("aether", "config.load", "Unknown service key '" + serviceKey
-                    + "'. Known keys: blob-store, " + "secret-manager, compute-engine");
-        }
-        return (Class<? extends io.foundry.aether.core.CloudService>) cls;
-    }
-
-    private static Class<?> _serviceClassOrNull(String serviceKey) {
-        return switch (serviceKey) {
-            case "blob-store" -> io.foundry.aether.core.storage.BlobStore.class;
-            case "secret-manager" -> io.foundry.aether.core.secrets.SecretManager.class;
-            case "compute-engine" -> io.foundry.aether.core.compute.ComputeEngine.class;
-            default -> null;
-        };
     }
 }

@@ -228,6 +228,11 @@ class AetherConfigLoaderTest {
     // Helper test-only second config type for type mismatch tests
     private static final class AnotherStubConfig implements ProviderConfig {
         @Override
+        public String name() {
+            return "another";
+        }
+
+        @Override
         public String providerType() {
             return "another";
         }
