@@ -38,6 +38,7 @@ public final class AwsProviderFactory implements ProviderFactory {
     @Override
     public <S extends CloudService> Optional<S> createService(ProviderConfig config, Class<S> serviceType) {
         AwsCloudProvider provider = new AwsCloudProvider((AwsProviderConfig) config);
+        provider.initialize();
         if (BlobStore.class.isAssignableFrom(serviceType)) {
             return Optional.of(serviceType.cast(new AwsS3BlobStore(provider)));
         }

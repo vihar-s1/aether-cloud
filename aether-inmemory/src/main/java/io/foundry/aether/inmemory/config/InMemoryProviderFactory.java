@@ -36,7 +36,8 @@ public final class InMemoryProviderFactory implements ProviderFactory {
 
     @Override
     public <S extends CloudService> Optional<S> createService(ProviderConfig config, Class<S> serviceType) {
-        InMemoryCloudProvider provider = new InMemoryCloudProvider();
+        InMemoryCloudProvider provider = new InMemoryCloudProvider(config.name());
+        provider.initialize();
         // Each call produces a new, independent service instance. If you need a
         // shared in-memory store across multiple calls, hold onto the returned
         // instance.

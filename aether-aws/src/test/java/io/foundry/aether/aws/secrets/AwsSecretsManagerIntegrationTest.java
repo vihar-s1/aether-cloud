@@ -6,6 +6,7 @@
 package io.foundry.aether.aws.secrets;
 
 import io.foundry.aether.aws.AwsCloudProvider;
+import io.foundry.aether.aws.config.AwsProviderConfig;
 import io.foundry.aether.core.contract.SecretManagerContractTest;
 import io.foundry.aether.core.secrets.SecretManager;
 import org.junit.jupiter.api.AfterAll;
@@ -51,8 +52,11 @@ class AwsSecretsManagerIntegrationTest extends SecretManagerContractTest {
     @Override
     protected SecretManager createSecretManager() {
         clearSecrets();
-        AwsCloudProvider provider = new AwsCloudProvider(localstack.getAccessKey(), localstack.getSecretKey(),
-                localstack.getEndpointOverride(Service.SECRETSMANAGER).toString(), localstack.getRegion());
+        AwsCloudProvider provider = new AwsCloudProvider(AwsProviderConfig.builder().name("test-aws")
+                .accessKey(localstack.getAccessKey()).secretKey(localstack.getSecretKey())
+                .endpoint(localstack.getEndpointOverride(Service.SECRETSMANAGER).toString())
+                .region(localstack.getRegion()).build());
+        provider.initialize();
         return new AwsSecretsManager(provider);
     }
 

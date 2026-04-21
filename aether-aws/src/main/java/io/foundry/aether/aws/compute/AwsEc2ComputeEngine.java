@@ -37,7 +37,7 @@ public class AwsEc2ComputeEngine implements ComputeEngine {
 
     public AwsEc2ComputeEngine(AwsCloudProvider provider) {
         this.provider = provider;
-        this.ec2Client = AwsUtils.applyCommonConfig(Ec2Client.builder(), provider).build();
+        this.ec2Client = provider.ec2Client();
     }
 
     @Override

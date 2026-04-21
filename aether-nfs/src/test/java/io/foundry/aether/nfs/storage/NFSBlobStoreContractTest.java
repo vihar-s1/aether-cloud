@@ -18,6 +18,8 @@ public class NFSBlobStoreContractTest extends BlobStoreContractTest {
 
     @Override
     protected BlobStore createBlobStore() {
-        return new NFSBlobStore(new NFSCloudProvider(tempDir.toString()));
+        NFSCloudProvider provider = new NFSCloudProvider("test-nfs", tempDir.toString());
+        provider.initialize();
+        return new NFSBlobStore(provider);
     }
 }

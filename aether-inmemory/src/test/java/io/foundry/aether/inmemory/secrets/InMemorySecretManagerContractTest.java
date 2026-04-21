@@ -13,6 +13,8 @@ class InMemorySecretManagerContractTest extends SecretManagerContractTest {
 
     @Override
     protected SecretManager createSecretManager() {
-        return new InMemorySecretManager(new InMemoryCloudProvider());
+        InMemoryCloudProvider provider = new InMemoryCloudProvider("test-inmemory");
+        provider.initialize();
+        return new InMemorySecretManager(provider);
     }
 }

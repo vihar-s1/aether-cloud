@@ -6,6 +6,7 @@
 package io.foundry.aether.aws.storage;
 
 import io.foundry.aether.aws.AwsCloudProvider;
+import io.foundry.aether.aws.config.AwsProviderConfig;
 import io.foundry.aether.core.contract.BlobStoreContractTest;
 import io.foundry.aether.core.storage.BlobStore;
 import org.junit.jupiter.api.AfterAll;
@@ -55,8 +56,11 @@ class AwsS3BlobStoreIntegrationTest extends BlobStoreContractTest {
     @Override
     protected BlobStore createBlobStore() {
         clearBuckets();
-        AwsCloudProvider provider = new AwsCloudProvider(localstack.getAccessKey(), localstack.getSecretKey(),
-                localstack.getEndpointOverride(Service.S3).toString(), localstack.getRegion());
+        AwsCloudProvider provider = new AwsCloudProvider(AwsProviderConfig.builder().name("test-aws")
+                .accessKey(localstack.getAccessKey()).secretKey(localstack.getSecretKey())
+                .endpoint(localstack.getEndpointOverride(Service.S3).toString()).region(localstack.getRegion())
+                .build());
+        provider.initialize();
         return new AwsS3BlobStore(provider);
     }
 

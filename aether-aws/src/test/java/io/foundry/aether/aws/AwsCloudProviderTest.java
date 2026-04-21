@@ -7,9 +7,8 @@ package io.foundry.aether.aws;
 
 import static org.assertj.core.api.Assertions.*;
 
-import io.foundry.aether.core.ProviderStatus;
+import io.foundry.aether.aws.config.AwsProviderConfig;
 import io.foundry.aether.core.exception.InvalidConfigurationException;
-import io.foundry.aether.core.exception.ProviderUnavailableException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -17,113 +16,68 @@ import org.junit.jupiter.api.Test;
 class AwsCloudProviderTest {
 
     @Test
-    @DisplayName("initializes with valid credentials and region")
-    void testInitialization() {
-        var provider = new AwsCloudProvider("test-key", "test-secret", "https://s3.amazonaws.com", "us-east-1");
+    @DisplayName("name() returns alias from config")
+    void name_returnsAlias() {
+        AwsProviderConfig config = AwsProviderConfig.builder().name("prod-aws").accessKey("AKIA123").secretKey("secret")
+                .region("us-east-1").build();
 
-        assertThat(provider.name()).isEqualTo("aws");
-        assertThat(provider.accessKey()).isEqualTo("test-key");
-        assertThat(provider.secretKey()).isEqualTo("test-secret");
-        assertThat(provider.endpoint()).isEqualTo("https://s3.amazonaws.com");
-        assertThat(provider.region()).isEqualTo("us-east-1");
-        assertThat(provider.status()).isEqualTo(ProviderStatus.INITIALIZED);
-    }
-
-    @Test
-    @DisplayName("transitions status from INITIALIZED to RUNNING")
-    void testInitializeTransition() {
-        var provider = new AwsCloudProvider("key", "secret", null, "us-west-2");
-
-        assertThat(provider.status()).isEqualTo(ProviderStatus.INITIALIZED);
+        var provider = new AwsCloudProvider(config);
         provider.initialize();
-        assertThat(provider.status()).isEqualTo(ProviderStatus.RUNNING);
-    }
-
-    @Test
-    @DisplayName("transitions status from RUNNING to SHUTDOWN")
-    void testShutdownTransition() {
-        var provider = new AwsCloudProvider("key", "secret", null, "eu-west-1");
-        provider.initialize();
-
+        assertThat(provider.name()).isEqualTo("prod-aws");
         provider.shutdown();
-        assertThat(provider.status()).isEqualTo(ProviderStatus.SHUTDOWN);
     }
 
     @Test
-    @DisplayName("throws when initializing already-initialized provider")
-    void testDoubleInitializeThrows() {
-        var provider = new AwsCloudProvider("key", "secret", null, "us-east-1");
-        provider.initialize();
+    @DisplayName("shutdown() closes clients without throwing")
+    void shutdown_closesClients() {
+        AwsProviderConfig config = AwsProviderConfig.builder().name("test-aws").accessKey("AKIA123").secretKey("secret")
+                .region("us-east-1").build();
 
-        assertThatThrownBy(provider::initialize)
-                .isInstanceOf(InvalidConfigurationException.class)
-                .hasMessageContaining("Provider is already running");
+        var provider = new AwsCloudProvider(config);
+        provider.initialize();
+        assertThatNoException().isThrownBy(provider::shutdown);
     }
 
     @Test
-    @DisplayName("throws when shutting down already-shutdown provider")
-    void testDoubleShutdownThrows() {
-        var provider = new AwsCloudProvider("key", "secret", null, "us-east-1");
+    @DisplayName("clients are non-null after initialize()")
+    void clients_nonNull() {
+        AwsProviderConfig config = AwsProviderConfig.builder().name("test-aws").accessKey("AKIA123").secretKey("secret")
+                .region("us-east-1").build();
+
+        var provider = new AwsCloudProvider(config);
         provider.initialize();
+        assertThat(provider.s3Client()).isNotNull();
+        assertThat(provider.secretsManagerClient()).isNotNull();
+        assertThat(provider.ec2Client()).isNotNull();
         provider.shutdown();
-
-        assertThatThrownBy(provider::shutdown)
-                .isInstanceOf(ProviderUnavailableException.class)
-                .hasMessageContaining("Provider is already shut down");
     }
 
     @Test
-    @DisplayName("throws InvalidConfigurationException when accessKey is null")
-    void testNullAccessKeyThrows() {
-        assertThatThrownBy(() -> new AwsCloudProvider(null, "secret", null, "us-east-1"))
+    @DisplayName("throws when only accessKey is provided without secretKey")
+    void partialCredentials_accessKeyOnly_throws() {
+        assertThatThrownBy(
+                () -> AwsProviderConfig.builder().name("test-aws").accessKey("AKIA123").region("us-east-1").build())
                 .isInstanceOf(InvalidConfigurationException.class)
-                .hasMessageContaining("accessKey must not be null or empty");
+                .hasMessageContaining("must both be provided or both be absent");
     }
 
     @Test
-    @DisplayName("throws InvalidConfigurationException when secretKey is null")
-    void testNullSecretKeyThrows() {
-        assertThatThrownBy(() -> new AwsCloudProvider("key", null, null, "us-east-1"))
+    @DisplayName("throws when only secretKey is provided without accessKey")
+    void partialCredentials_secretKeyOnly_throws() {
+        assertThatThrownBy(
+                () -> AwsProviderConfig.builder().name("test-aws").secretKey("secret").region("us-east-1").build())
                 .isInstanceOf(InvalidConfigurationException.class)
-                .hasMessageContaining("secretKey must not be null or empty");
+                .hasMessageContaining("must both be provided or both be absent");
     }
 
     @Test
-    @DisplayName("throws InvalidConfigurationException when region is null")
-    void testNullRegionThrows() {
-        assertThatThrownBy(() -> new AwsCloudProvider("key", "secret", null, null))
-                .isInstanceOf(InvalidConfigurationException.class)
-                .hasMessageContaining("region must not be null or empty");
-    }
+    @DisplayName("no credentials builds successfully (IAM / default credential chain)")
+    void noCredentials_iamMode_succeeds() {
+        AwsProviderConfig config = AwsProviderConfig.builder().name("test-aws").region("us-east-1").build();
 
-    @Test
-    @DisplayName("allows null endpoint (uses default AWS endpoint)")
-    void testNullEndpointAllowed() {
-        var provider = new AwsCloudProvider("key", "secret", null, "us-east-1");
-        assertThat(provider.endpoint()).isNull();
-    }
-
-    @Test
-    @DisplayName("throws InvalidConfigurationException when accessKey is empty")
-    void testEmptyAccessKeyThrows() {
-        assertThatThrownBy(() -> new AwsCloudProvider("", "secret", null, "us-east-1"))
-                .isInstanceOf(InvalidConfigurationException.class)
-                .hasMessageContaining("accessKey must not be null or empty");
-    }
-
-    @Test
-    @DisplayName("throws InvalidConfigurationException when secretKey is empty")
-    void testEmptySecretKeyThrows() {
-        assertThatThrownBy(() -> new AwsCloudProvider("key", "", null, "us-east-1"))
-                .isInstanceOf(InvalidConfigurationException.class)
-                .hasMessageContaining("secretKey must not be null or empty");
-    }
-
-    @Test
-    @DisplayName("throws InvalidConfigurationException when region is empty")
-    void testEmptyRegionThrows() {
-        assertThatThrownBy(() -> new AwsCloudProvider("key", "secret", null, ""))
-                .isInstanceOf(InvalidConfigurationException.class)
-                .hasMessageContaining("region must not be null or empty");
+        var provider = new AwsCloudProvider(config);
+        provider.initialize();
+        assertThat(provider.s3Client()).isNotNull();
+        provider.shutdown();
     }
 }

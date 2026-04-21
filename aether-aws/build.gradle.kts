@@ -9,12 +9,12 @@ dependencies {
     testImplementation(testFixtures(project(":aether-core")))
 
     // AWS SDK
-    api(platform("software.amazon.awssdk:bom:2.34.0"))
-    api("software.amazon.awssdk:s3")
-    api("software.amazon.awssdk:ec2")
-    api("software.amazon.awssdk:kms")
-    api("software.amazon.awssdk:sts")
-    api("software.amazon.awssdk:secretsmanager")
+    implementation(platform("software.amazon.awssdk:bom:2.34.0"))
+    implementation("software.amazon.awssdk:s3")
+    implementation("software.amazon.awssdk:ec2")
+    runtimeOnly("software.amazon.awssdk:kms")
+    runtimeOnly("software.amazon.awssdk:sts")
+    implementation("software.amazon.awssdk:secretsmanager")
 
     // Testcontainers (integration tests)
     testImplementation(platform("org.testcontainers:testcontainers-bom:2.0.4"))

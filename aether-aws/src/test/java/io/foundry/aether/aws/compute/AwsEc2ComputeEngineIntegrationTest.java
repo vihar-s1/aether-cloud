@@ -6,6 +6,7 @@
 package io.foundry.aether.aws.compute;
 
 import io.foundry.aether.aws.AwsCloudProvider;
+import io.foundry.aether.aws.config.AwsProviderConfig;
 import io.foundry.aether.core.compute.ComputeEngine;
 import io.foundry.aether.core.compute.InstanceState;
 import io.foundry.aether.core.contract.ComputeEngineContractTest;
@@ -44,15 +45,18 @@ class AwsEc2ComputeEngineIntegrationTest extends ComputeEngineContractTest {
 
     @AfterAll
     static void stopLocalStack() {
-         adminClient.close();
+        adminClient.close();
         localstack.stop();
     }
 
     @Override
     protected ComputeEngine createComputeEngine() {
         terminateAllInstances();
-        AwsCloudProvider provider = new AwsCloudProvider(localstack.getAccessKey(), localstack.getSecretKey(),
-                localstack.getEndpointOverride(Service.EC2).toString(), localstack.getRegion());
+        AwsCloudProvider provider = new AwsCloudProvider(AwsProviderConfig.builder().name("test-aws")
+                .accessKey(localstack.getAccessKey()).secretKey(localstack.getSecretKey())
+                .endpoint(localstack.getEndpointOverride(Service.EC2).toString()).region(localstack.getRegion())
+                .build());
+        provider.initialize();
         return new AwsEc2ComputeEngine(provider);
     }
 

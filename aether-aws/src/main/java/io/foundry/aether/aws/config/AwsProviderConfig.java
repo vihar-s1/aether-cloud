@@ -37,12 +37,20 @@ public final class AwsProviderConfig implements ProviderConfig {
         return AwsCloudProvider.PROVIDER_NAME;
     }
 
-    public String accessKey() {
-        return accessKey;
+    /**
+     * Returns the explicit access key, or empty to use the default credential chain
+     * (IAM/env).
+     */
+    public Optional<String> accessKey() {
+        return Optional.ofNullable(accessKey);
     }
 
-    public String secretKey() {
-        return secretKey;
+    /**
+     * Returns the explicit secret key, or empty to use the default credential chain
+     * (IAM/env).
+     */
+    public Optional<String> secretKey() {
+        return Optional.ofNullable(secretKey);
     }
 
     public String region() {
@@ -92,9 +100,13 @@ public final class AwsProviderConfig implements ProviderConfig {
         }
 
         public AwsProviderConfig build() {
-            _require("access-key", accessKey);
-            _require("secret-key", secretKey);
             _require("region", region);
+            boolean hasKey = accessKey != null && !accessKey.isBlank();
+            boolean hasSecret = secretKey != null && !secretKey.isBlank();
+            if (hasKey != hasSecret) {
+                throw new InvalidConfigurationException("aws", "config",
+                        "access-key and secret-key must both be provided or both be absent");
+            }
             return new AwsProviderConfig(this);
         }
 

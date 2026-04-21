@@ -6,6 +6,7 @@
 package io.foundry.aether.aws.internal;
 
 import io.foundry.aether.aws.AwsCloudProvider;
+import io.foundry.aether.aws.config.AwsProviderConfig;
 import io.foundry.aether.core.exception.AuthenticationException;
 import io.foundry.aether.core.exception.CloudErrorCodes;
 import io.foundry.aether.core.exception.CloudException;
@@ -15,9 +16,9 @@ import io.foundry.aether.core.exception.ProviderUnavailableException;
 import io.foundry.aether.core.exception.QuotaExceededException;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
 import io.foundry.aether.core.internal.ExceptionUtils;
-import io.foundry.aether.core.internal.StringUtils;
 import java.net.URI;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.awscore.client.builder.AwsClientBuilder;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
@@ -31,12 +32,13 @@ public final class AwsUtils {
     private AwsUtils() {
     }
 
-    public static <B extends AwsClientBuilder<B, ?>> B applyCommonConfig(B builder, AwsCloudProvider provider) {
-        builder.region(Region.of(provider.region())).credentialsProvider(StaticCredentialsProvider
-                .create(AwsBasicCredentials.create(provider.accessKey(), provider.secretKey())));
-        if (!StringUtils.isEmpty(provider.endpoint())) {
-            builder.endpointOverride(URI.create(provider.endpoint()));
-        }
+    public static <B extends AwsClientBuilder<B, ?>> B applyCommonConfig(B builder, AwsProviderConfig config) {
+        var credentials = config.accessKey().isPresent()
+                ? StaticCredentialsProvider
+                        .create(AwsBasicCredentials.create(config.accessKey().get(), config.secretKey().get()))
+                : DefaultCredentialsProvider.builder().build();
+        builder.region(Region.of(config.region())).credentialsProvider(credentials);
+        config.endpoint().ifPresent(ep -> builder.endpointOverride(URI.create(ep)));
         return builder;
     }
 

@@ -29,8 +29,8 @@ class AwsProviderFactoryTest {
         AwsProviderConfig config = (AwsProviderConfig) factory.createConfig("prod-aws", props);
 
         assertThat(config.name()).isEqualTo("prod-aws");
-        assertThat(config.accessKey()).isEqualTo("AKIA123");
-        assertThat(config.secretKey()).isEqualTo("secret");
+        assertThat(config.accessKey()).hasValue("AKIA123");
+        assertThat(config.secretKey()).hasValue("secret");
         assertThat(config.region()).isEqualTo("us-east-1");
         assertThat(config.endpoint()).hasValue("http://localhost:4566");
         assertThat(config.providerType()).isEqualTo("aws");
@@ -46,19 +46,31 @@ class AwsProviderFactoryTest {
     }
 
     @Test
-    void createConfig_missingAccessKey_throws() {
-        var props = Map.of("secret-key", "secret", "region", "us-east-1");
+    void createConfig_noCredentials_succeeds() {
+        var props = Map.of("region", "us-east-1");
 
-        assertThatThrownBy(() -> factory.createConfig("prod-aws", props))
-                .isInstanceOf(InvalidConfigurationException.class).hasMessageContaining("access-key");
+        AwsProviderConfig config = (AwsProviderConfig) factory.createConfig("prod-aws", props);
+
+        assertThat(config.accessKey()).isEmpty();
+        assertThat(config.secretKey()).isEmpty();
     }
 
     @Test
-    void createConfig_missingSecretKey_throws() {
+    void createConfig_accessKeyWithoutSecretKey_throws() {
         var props = Map.of("access-key", "AKIA123", "region", "us-east-1");
 
         assertThatThrownBy(() -> factory.createConfig("prod-aws", props))
-                .isInstanceOf(InvalidConfigurationException.class).hasMessageContaining("secret-key");
+                .isInstanceOf(InvalidConfigurationException.class)
+                .hasMessageContaining("must both be provided or both be absent");
+    }
+
+    @Test
+    void createConfig_secretKeyWithoutAccessKey_throws() {
+        var props = Map.of("secret-key", "secret", "region", "us-east-1");
+
+        assertThatThrownBy(() -> factory.createConfig("prod-aws", props))
+                .isInstanceOf(InvalidConfigurationException.class)
+                .hasMessageContaining("must both be provided or both be absent");
     }
 
     @Test

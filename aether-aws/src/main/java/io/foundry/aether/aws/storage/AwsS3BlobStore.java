@@ -36,7 +36,7 @@ public class AwsS3BlobStore implements BlobStore {
 
     public AwsS3BlobStore(AwsCloudProvider provider) {
         this.provider = provider;
-        this.s3Client = AwsUtils.applyCommonConfig(S3Client.builder(), provider).forcePathStyle(true).build();
+        this.s3Client = provider.s3Client();
     }
 
     @Override

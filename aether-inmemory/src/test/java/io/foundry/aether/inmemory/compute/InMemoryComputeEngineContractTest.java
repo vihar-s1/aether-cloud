@@ -13,6 +13,8 @@ class InMemoryComputeEngineContractTest extends ComputeEngineContractTest {
 
     @Override
     protected ComputeEngine createComputeEngine() {
-        return new InMemoryComputeEngine(new InMemoryCloudProvider());
+        InMemoryCloudProvider provider = new InMemoryCloudProvider("test-inmemory");
+        provider.initialize();
+        return new InMemoryComputeEngine(provider);
     }
 }

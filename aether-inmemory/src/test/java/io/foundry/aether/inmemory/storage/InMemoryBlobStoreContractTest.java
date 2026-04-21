@@ -13,6 +13,8 @@ class InMemoryBlobStoreContractTest extends BlobStoreContractTest {
 
     @Override
     protected BlobStore createBlobStore() {
-        return new InMemoryBlobStore(new InMemoryCloudProvider());
+        InMemoryCloudProvider provider = new InMemoryCloudProvider("test-inmemory");
+        provider.initialize();
+        return new InMemoryBlobStore(provider);
     }
 }

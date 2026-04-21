@@ -18,6 +18,8 @@ public class NFSSecretManagerContractTest extends SecretManagerContractTest {
 
     @Override
     protected SecretManager createSecretManager() {
-        return new NFSSecretManager(new NFSCloudProvider(tempDir.toString()));
+        NFSCloudProvider provider = new NFSCloudProvider("test-nfs", tempDir.toString());
+        provider.initialize();
+        return new NFSSecretManager(provider);
     }
 }

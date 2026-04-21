@@ -34,7 +34,7 @@ public class AwsSecretsManager implements SecretManager {
 
     public AwsSecretsManager(AwsCloudProvider provider) {
         this.provider = provider;
-        this.secretsClient = AwsUtils.applyCommonConfig(SecretsManagerClient.builder(), provider).build();
+        this.secretsClient = provider.secretsManagerClient();
     }
 
     @Override

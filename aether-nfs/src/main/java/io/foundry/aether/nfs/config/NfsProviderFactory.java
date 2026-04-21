@@ -35,6 +35,7 @@ public final class NfsProviderFactory implements ProviderFactory {
     @Override
     public <S extends CloudService> Optional<S> createService(ProviderConfig config, Class<S> serviceType) {
         NFSCloudProvider provider = new NFSCloudProvider((NfsProviderConfig) config);
+        provider.initialize();
         if (BlobStore.class.isAssignableFrom(serviceType)) {
             return Optional.of(serviceType.cast(new NFSBlobStore(provider)));
         }

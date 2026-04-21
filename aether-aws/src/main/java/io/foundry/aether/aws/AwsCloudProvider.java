@@ -6,35 +6,76 @@
 package io.foundry.aether.aws;
 
 import io.foundry.aether.aws.config.AwsProviderConfig;
+import io.foundry.aether.aws.internal.AwsUtils;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.ProviderStatus;
-import io.foundry.aether.core.exception.InvalidConfigurationException;
-import io.foundry.aether.core.exception.ProviderUnavailableException;
+import java.util.Optional;
+import software.amazon.awssdk.services.ec2.Ec2Client;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 
+/**
+ * AWS provider instance. Owns the SDK clients for a single configured AWS
+ * account/region.
+ *
+ * <p>
+ * Call {@link #initialize()} before using any service. Call {@link #shutdown()}
+ * when done to close all clients.
+ */
 public class AwsCloudProvider implements CloudProvider {
 
     public static final String PROVIDER_NAME = "aws";
 
-    private final String accessKey;
-    private final String secretKey;
-    private final String endpoint;
-    private final String region;
-    private volatile ProviderStatus status = ProviderStatus.INITIALIZED;
+    private final String alias;
+    private final AwsProviderConfig config;
+
+    private volatile ProviderStatus status = ProviderStatus.UNINITIALIZED;
+    private volatile Throwable failureCause;
+    private volatile S3Client s3Client;
+    private volatile SecretsManagerClient secretsManagerClient;
+    private volatile Ec2Client ec2Client;
 
     public AwsCloudProvider(AwsProviderConfig config) {
-        this(config.accessKey(), config.secretKey(), config.endpoint().orElse(null), config.region());
-    }
-
-    public AwsCloudProvider(String accessKey, String secretKey, String endpoint, String region) {
-        this.accessKey = nullSafe(accessKey, "accessKey");
-        this.secretKey = nullSafe(secretKey, "secretKey");
-        this.endpoint = endpoint;
-        this.region = nullSafe(region, "region");
+        this.alias = config.name();
+        this.config = config;
     }
 
     @Override
     public String name() {
-        return PROVIDER_NAME;
+        return alias;
+    }
+
+    @Override
+    public synchronized void initialize() {
+        if (status == ProviderStatus.RUNNING) {
+            throw new IllegalStateException("Provider '" + alias + "' is already running");
+        }
+        if (status == ProviderStatus.SHUTDOWN) {
+            throw new IllegalStateException(
+                    "Provider '" + alias + "' has been shut down — create a new instance to reuse");
+        }
+        try {
+            s3Client = AwsUtils.applyCommonConfig(S3Client.builder(), config).forcePathStyle(true).build();
+            secretsManagerClient = AwsUtils.applyCommonConfig(SecretsManagerClient.builder(), config).build();
+            ec2Client = AwsUtils.applyCommonConfig(Ec2Client.builder(), config).build();
+            failureCause = null;
+            status = ProviderStatus.RUNNING;
+        } catch (Exception e) {
+            status = ProviderStatus.FAILED;
+            failureCause = e;
+            throw e;
+        }
+    }
+
+    @Override
+    public synchronized void shutdown() {
+        if (status != ProviderStatus.RUNNING) {
+            throw new IllegalStateException("Provider '" + alias + "' cannot be shut down from status: " + status);
+        }
+        s3Client.close();
+        secretsManagerClient.close();
+        ec2Client.close();
+        status = ProviderStatus.SHUTDOWN;
     }
 
     @Override
@@ -43,44 +84,29 @@ public class AwsCloudProvider implements CloudProvider {
     }
 
     @Override
-    public void initialize() {
-        if (status == ProviderStatus.SHUTDOWN) {
-            throw new InvalidConfigurationException(PROVIDER_NAME, "initialize", "Provider has been shut down");
+    public Optional<Throwable> failureCause() {
+        return Optional.ofNullable(failureCause);
+    }
+
+    public S3Client s3Client() {
+        checkRunning();
+        return s3Client;
+    }
+
+    public SecretsManagerClient secretsManagerClient() {
+        checkRunning();
+        return secretsManagerClient;
+    }
+
+    public Ec2Client ec2Client() {
+        checkRunning();
+        return ec2Client;
+    }
+
+    private void checkRunning() {
+        if (status != ProviderStatus.RUNNING) {
+            throw new IllegalStateException("Provider '" + alias + "' is not running (status: " + status + ")"
+                    + (failureCause != null ? " — failure: " + failureCause.getMessage() : ""));
         }
-        if (status == ProviderStatus.RUNNING) {
-            throw new InvalidConfigurationException(PROVIDER_NAME, "initialize", "Provider is already running");
-        }
-        status = ProviderStatus.RUNNING;
-    }
-
-    @Override
-    public void shutdown() {
-        if (status == ProviderStatus.SHUTDOWN) {
-            throw new ProviderUnavailableException(PROVIDER_NAME, "shutdown", "Provider is already shut down");
-        }
-        status = ProviderStatus.SHUTDOWN;
-    }
-
-    public String accessKey() {
-        return accessKey;
-    }
-
-    public String secretKey() {
-        return secretKey;
-    }
-
-    public String endpoint() {
-        return endpoint;
-    }
-
-    public String region() {
-        return region;
-    }
-
-    private String nullSafe(String value, String name) {
-        if (value == null || value.isEmpty()) {
-            throw new InvalidConfigurationException(PROVIDER_NAME, "initialize", name + " must not be null or empty");
-        }
-        return value;
     }
 }
