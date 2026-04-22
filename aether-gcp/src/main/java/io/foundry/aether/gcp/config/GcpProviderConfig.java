@@ -17,6 +17,7 @@ public final class GcpProviderConfig implements ProviderConfig {
     private final String credentialsPath;
     private final String zone;
     private final String storageEndpoint;
+    private final boolean noCredentials;
 
     private GcpProviderConfig(Builder b) {
         this.name = b.name;
@@ -24,6 +25,7 @@ public final class GcpProviderConfig implements ProviderConfig {
         this.credentialsPath = b.credentialsPath;
         this.zone = b.zone;
         this.storageEndpoint = b.storageEndpoint;
+        this.noCredentials = b.noCredentials;
     }
 
     @Override
@@ -63,6 +65,15 @@ public final class GcpProviderConfig implements ProviderConfig {
         return Optional.ofNullable(storageEndpoint);
     }
 
+    /**
+     * When {@code true}, skip credential loading entirely. Use this for
+     * unauthenticated local emulators (e.g. fake-gcs-server in development or CI)
+     * that do not validate credentials. Defaults to {@code false}.
+     */
+    public boolean noCredentials() {
+        return noCredentials;
+    }
+
     public static Builder builder() {
         return new Builder();
     }
@@ -73,6 +84,7 @@ public final class GcpProviderConfig implements ProviderConfig {
         private String credentialsPath;
         private String zone;
         private String storageEndpoint;
+        private boolean noCredentials = false;
 
         public Builder name(String name) {
             this.name = name;
@@ -96,6 +108,11 @@ public final class GcpProviderConfig implements ProviderConfig {
 
         public Builder storageEndpoint(String storageEndpoint) {
             this.storageEndpoint = storageEndpoint;
+            return this;
+        }
+
+        public Builder noCredentials(boolean noCredentials) {
+            this.noCredentials = noCredentials;
             return this;
         }
 

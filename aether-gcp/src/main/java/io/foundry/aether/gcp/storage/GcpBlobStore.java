@@ -28,7 +28,6 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-
 public class GcpBlobStore implements BlobStore {
 
     private final GcpCloudProvider provider;

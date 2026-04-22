@@ -6,7 +6,9 @@
 package io.foundry.aether.gcp;
 
 import com.google.api.gax.core.FixedCredentialsProvider;
+import com.google.auth.Credentials;
 import com.google.auth.oauth2.GoogleCredentials;
+import com.google.cloud.NoCredentials;
 import com.google.cloud.compute.v1.InstancesClient;
 import com.google.cloud.compute.v1.InstancesSettings;
 import com.google.cloud.secretmanager.v1.SecretManagerServiceClient;
@@ -15,33 +17,19 @@ import com.google.cloud.storage.Storage;
 import com.google.cloud.storage.StorageOptions;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.ProviderStatus;
+import io.foundry.aether.core.exception.InvalidConfigurationException;
 import io.foundry.aether.gcp.config.GcpProviderConfig;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Optional;
-
 /**
- * GCP provider instance. Owns lazily-built SDK clients for Storage, Secret
- * Manager, and Compute.
+ * GCP provider instance. Owns the SDK clients for a single configured GCP
+ * project.
  *
  * <p>
- * Lifecycle:
- * <ol>
- * <li>Construct with a {@link GcpProviderConfig}.
- * <li>{@link #initialize()} — validates lifecycle state and marks the provider
- * {@code RUNNING}.
- * <li>Use — service implementations call {@link #storageClient()},
- * {@link #secretManagerClient()}, or {@link #instancesClient()}; each client is
- * built lazily on first access.
- * <li>{@link #shutdown()} — closes any clients that were built.
- * </ol>
- *
- * <p>
- * Client building is lazy because GCP has no single emulator that covers all
- * three services. Providers used only for Storage (for example) never attempt
- * to build Secret Manager or Compute clients, so missing credentials for unused
- * services do not cause failures.
+ * Call {@link #initialize()} before using any service. Call {@link #shutdown()}
+ * when done to close all clients.
  */
 public class GcpCloudProvider implements CloudProvider {
 
@@ -75,8 +63,18 @@ public class GcpCloudProvider implements CloudProvider {
             throw new IllegalStateException(
                     "Provider '" + alias + "' has been shut down — create a new instance to reuse");
         }
-        failureCause = null;
-        status = ProviderStatus.RUNNING;
+        try {
+            Credentials credentials = resolveCredentials();
+            storageClient = buildStorageClient(credentials);
+            secretManagerClient = buildSecretManagerClient(credentials);
+            instancesClient = buildInstancesClient(credentials);
+            failureCause = null;
+            status = ProviderStatus.RUNNING;
+        } catch (Exception e) {
+            status = ProviderStatus.FAILED;
+            failureCause = e;
+            throw e;
+        }
     }
 
     @Override
@@ -84,19 +82,13 @@ public class GcpCloudProvider implements CloudProvider {
         if (status != ProviderStatus.RUNNING) {
             throw new IllegalStateException("Provider '" + alias + "' cannot be shut down from status: " + status);
         }
-        if (storageClient != null) {
-            try {
-                storageClient.close();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
+        try {
+            storageClient.close();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
-        if (secretManagerClient != null) {
-            secretManagerClient.close();
-        }
-        if (instancesClient != null) {
-            instancesClient.close();
-        }
+        secretManagerClient.close();
+        instancesClient.close();
         status = ProviderStatus.SHUTDOWN;
     }
 
@@ -116,68 +108,23 @@ public class GcpCloudProvider implements CloudProvider {
 
     public Storage storageClient() {
         checkRunning();
-        if (storageClient == null) {
-            synchronized (this) {
-                if (storageClient == null) {
-                    storageClient = buildStorageClient();
-                }
-            }
-        }
         return storageClient;
     }
 
     public SecretManagerServiceClient secretManagerClient() {
         checkRunning();
-        if (secretManagerClient == null) {
-            synchronized (this) {
-                if (secretManagerClient == null) {
-                    secretManagerClient = buildSecretManagerClient();
-                }
-            }
-        }
         return secretManagerClient;
     }
 
     public InstancesClient instancesClient() {
         checkRunning();
-        if (instancesClient == null) {
-            synchronized (this) {
-                if (instancesClient == null) {
-                    instancesClient = buildInstancesClient();
-                }
-            }
-        }
         return instancesClient;
     }
 
-    private Storage buildStorageClient() {
-        StorageOptions.Builder builder = StorageOptions.newBuilder().setProjectId(config.projectId())
-                .setCredentials(loadCredentials());
-        config.storageEndpoint().ifPresent(builder::setHost);
-        return builder.build().getService();
-    }
-
-    private SecretManagerServiceClient buildSecretManagerClient() {
-        try {
-            SecretManagerServiceSettings settings = SecretManagerServiceSettings.newBuilder()
-                    .setCredentialsProvider(FixedCredentialsProvider.create(loadCredentials())).build();
-            return SecretManagerServiceClient.create(settings);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to build GCP Secret Manager client for provider '" + alias + "'", e);
+    private Credentials resolveCredentials() {
+        if (config.noCredentials()) {
+            return NoCredentials.getInstance();
         }
-    }
-
-    private InstancesClient buildInstancesClient() {
-        try {
-            InstancesSettings settings = InstancesSettings.newBuilder()
-                    .setCredentialsProvider(FixedCredentialsProvider.create(loadCredentials())).build();
-            return InstancesClient.create(settings);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to build GCP Instances client for provider '" + alias + "'", e);
-        }
-    }
-
-    private GoogleCredentials loadCredentials() {
         try {
             if (config.credentialsPath().isPresent()) {
                 try (InputStream is = new FileInputStream(config.credentialsPath().get())) {
@@ -188,7 +135,35 @@ public class GcpCloudProvider implements CloudProvider {
             return GoogleCredentials.getApplicationDefault()
                     .createScoped("https://www.googleapis.com/auth/cloud-platform");
         } catch (IOException e) {
-            throw new RuntimeException("Failed to load GCP credentials for provider '" + alias + "'", e);
+            throw new InvalidConfigurationException(GcpCloudProvider.PROVIDER_NAME, "initialize",
+                    "Failed to load GCP credentials: " + e.getMessage());
+        }
+    }
+
+    private Storage buildStorageClient(Credentials credentials) {
+        StorageOptions.Builder builder = StorageOptions.newBuilder().setProjectId(config.projectId())
+                .setCredentials(credentials);
+        config.storageEndpoint().ifPresent(builder::setHost);
+        return builder.build().getService();
+    }
+
+    private SecretManagerServiceClient buildSecretManagerClient(Credentials credentials) {
+        try {
+            SecretManagerServiceSettings settings = SecretManagerServiceSettings.newBuilder()
+                    .setCredentialsProvider(FixedCredentialsProvider.create(credentials)).build();
+            return SecretManagerServiceClient.create(settings);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to build GCP Secret Manager client for provider '" + alias + "'", e);
+        }
+    }
+
+    private InstancesClient buildInstancesClient(Credentials credentials) {
+        try {
+            InstancesSettings settings = InstancesSettings.newBuilder()
+                    .setCredentialsProvider(FixedCredentialsProvider.create(credentials)).build();
+            return InstancesClient.create(settings);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to build GCP Instances client for provider '" + alias + "'", e);
         }
     }
 

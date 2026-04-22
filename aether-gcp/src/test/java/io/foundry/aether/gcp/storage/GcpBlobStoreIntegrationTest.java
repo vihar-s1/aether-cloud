@@ -38,7 +38,7 @@ class GcpBlobStoreIntegrationTest extends BlobStoreContractTest {
     @BeforeAll
     static void startFakeGcs() {
         fakeGcs.start();
-        adminStorage = buildStorage();
+        adminStorage = buildAdminStorage();
         for (String bucket : BUCKETS) {
             adminStorage.create(BucketInfo.of(bucket));
         }
@@ -54,7 +54,7 @@ class GcpBlobStoreIntegrationTest extends BlobStoreContractTest {
     protected BlobStore createBlobStore() {
         clearBuckets();
         GcpProviderConfig config = GcpProviderConfig.builder().name("test-gcp").projectId(PROJECT_ID)
-                .storageEndpoint(gcsHost()).build();
+                .storageEndpoint(gcsHost()).noCredentials(true).build();
         GcpCloudProvider provider = new GcpCloudProvider(config);
         provider.initialize();
         return new GcpBlobStore(provider);
@@ -69,7 +69,7 @@ class GcpBlobStoreIntegrationTest extends BlobStoreContractTest {
         }
     }
 
-    private static Storage buildStorage() {
+    private static Storage buildAdminStorage() {
         return StorageOptions.newBuilder().setHost(gcsHost()).setProjectId(PROJECT_ID)
                 .setCredentials(NoCredentials.getInstance()).build().getService();
     }

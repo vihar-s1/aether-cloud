@@ -28,7 +28,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-
 public class GcpComputeEngine implements ComputeEngine {
 
     private final GcpCloudProvider provider;

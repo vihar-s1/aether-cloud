@@ -24,7 +24,6 @@ import io.foundry.aether.core.secrets.SecretValue;
 import io.foundry.aether.gcp.GcpCloudProvider;
 import io.foundry.aether.gcp.internal.GcpUtils;
 import java.util.List;
-
 public class GcpSecretManager implements SecretManager {
 
     private final GcpCloudProvider provider;
