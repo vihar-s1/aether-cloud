@@ -24,6 +24,9 @@ import io.foundry.aether.core.secrets.SecretValue;
 import io.foundry.aether.gcp.GcpCloudProvider;
 import io.foundry.aether.gcp.internal.GcpUtils;
 import java.util.List;
+import javax.annotation.concurrent.ThreadSafe;
+
+@ThreadSafe
 public class GcpSecretManager implements SecretManager {
 
     private final GcpCloudProvider provider;
@@ -94,9 +97,8 @@ public class GcpSecretManager implements SecretManager {
             String currentValue = current.getPayload().getData().toStringUtf8();
             SecretVersion newVersion = client.addSecretVersion(SecretName.of(projectId, secretId),
                     SecretPayload.newBuilder().setData(ByteString.copyFromUtf8(currentValue)).build());
-            Secret secret = client.getSecret(SecretName.of(projectId, secretId));
             return new SecretValue(secretId, currentValue, _versionNum(newVersion.getName()),
-                    _toMillis(secret.getCreateTime()));
+                    _toMillis(newVersion.getCreateTime()));
         } catch (ApiException e) {
             throw GcpUtils.wrapGcpException(e, "rotate", SECRET, secretId, CloudErrorCodes.SECRET_NOT_FOUND);
         }

@@ -13,6 +13,9 @@ object AetherVersions {
     const val GCP_STORAGE = "2.30.0"
     const val AZURE_CORE = "1.45.0"
 
+    // Annotations
+    const val JSR305 = "3.0.2"
+
     // Testing
     const val JUNIT = "5.12.2"
     const val JUNIT_PLATFORM_LAUNCHER = "1.12.2"
@@ -47,4 +50,7 @@ object AetherLibs {
     const val JUNIT_PLATFORM_LAUNCHER = "org.junit.platform:junit-platform-launcher:${AetherVersions.JUNIT_PLATFORM_LAUNCHER}"
     const val MOCKITO_CORE = "org.mockito:mockito-core:${AetherVersions.MOCKITO}"
     const val ASSERTJ_CORE = "org.assertj:assertj-core:${AetherVersions.ASSERTJ}"
+
+    // Annotations
+    const val JSR305 = "com.google.code.findbugs:jsr305:${AetherVersions.JSR305}"
 }

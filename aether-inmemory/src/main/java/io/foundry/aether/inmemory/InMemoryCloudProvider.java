@@ -8,7 +8,9 @@ package io.foundry.aether.inmemory;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.ProviderStatus;
 import java.util.Optional;
+import javax.annotation.concurrent.ThreadSafe;
 
+@ThreadSafe
 public class InMemoryCloudProvider implements CloudProvider {
 
     public static final String PROVIDER_NAME = "inmemory";

@@ -45,6 +45,8 @@ class AetherJavaConventionPlugin : Plugin<Project> {
             add("api", AetherLibs.JACKSON_DATABIND)
             add("api", AetherLibs.COMMONS_LANG3)
 
+            add("compileOnly", AetherLibs.JSR305)
+
             add("testImplementation", AetherLibs.JUNIT_JUPITER)
             add("testRuntimeOnly", AetherLibs.JUNIT_PLATFORM_LAUNCHER)
             add("testImplementation", AetherLibs.MOCKITO_CORE)
@@ -102,4 +104,7 @@ open class AetherLibsExtension {
     val junitPlatformLauncher = AetherLibs.JUNIT_PLATFORM_LAUNCHER
     val mockitoCore = AetherLibs.MOCKITO_CORE
     val assertjCore = AetherLibs.ASSERTJ_CORE
+
+    // Annotations
+    val jsr305 = AetherLibs.JSR305
 }

@@ -14,11 +14,15 @@ import io.foundry.aether.core.exception.ResourceNotFoundException;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import javax.annotation.concurrent.ThreadSafe;
 
+@ThreadSafe
 public class InMemoryComputeEngine implements ComputeEngine {
 
     private final CloudProvider provider;
     private final ConcurrentHashMap<String, InstanceInfo> instances = new ConcurrentHashMap<>();
+    private final AtomicInteger ipCounter = new AtomicInteger(0);
 
     public InMemoryComputeEngine(CloudProvider provider) {
         this.provider = provider;
@@ -32,14 +36,8 @@ public class InMemoryComputeEngine implements ComputeEngine {
     @Override
     public InstanceInfo createInstance(InstanceConfig config) {
         String instanceId = UUID.randomUUID().toString();
-        var info = new InstanceInfo(
-                instanceId,
-                config.name(),
-                InstanceState.RUNNING,
-                null,
-                "10.0.0." + (instances.size() + 1),
-                System.currentTimeMillis(),
-                config.tags());
+        var info = new InstanceInfo(instanceId, config.name(), InstanceState.RUNNING, null,
+                "10.0.0." + ipCounter.incrementAndGet(), System.currentTimeMillis(), config.tags());
         instances.put(instanceId, info);
         return info;
     }

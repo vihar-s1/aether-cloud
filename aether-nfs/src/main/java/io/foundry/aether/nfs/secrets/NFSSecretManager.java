@@ -22,14 +22,23 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import javax.annotation.concurrent.NotThreadSafe;
 
+/**
+ * Not thread-safe: each secret is stored as two separate files (value +
+ * metadata). Concurrent reads and writes are not atomic — a reader can observe
+ * a new value paired with old metadata or vice versa. The NFS provider is
+ * intended for single-threaded development and testing use only.
+ */
+@NotThreadSafe
 public class NFSSecretManager implements SecretManager {
 
     private static final String SECRETS_BUCKET = ".aether-nfs/secrets";
 
     private final NFSCloudProvider provider;
 
-    private record Entry(String value, SecretMetadata metadata) {}
+    private record Entry(String value, SecretMetadata metadata) {
+    }
 
     public NFSSecretManager(NFSCloudProvider provider) {
         this.provider = provider;
@@ -46,18 +55,14 @@ public class NFSSecretManager implements SecretManager {
         if (entry == null) {
             throw new ResourceNotFoundException(provider.name(), "getSecret", SECRET, secretId);
         }
-        return new SecretValue(
-                secretId,
-                entry.value(),
-                entry.metadata().versionId(),
-                entry.metadata().createdAtMs());
+        return new SecretValue(secretId, entry.value(), entry.metadata().versionId(), entry.metadata().createdAtMs());
     }
 
     @Override
     public SecretMetadata createSecret(String secretId, String value) {
         if (_findSecretMetadata(secretId) != null) {
-            throw new InvalidConfigurationException(
-                    provider.name(), "createSecret", "Secret already exists: " + secretId);
+            throw new InvalidConfigurationException(provider.name(), "createSecret",
+                    "Secret already exists: " + secretId);
         }
         String versionId = String.valueOf(System.nanoTime());
         long createdAt = System.currentTimeMillis();
@@ -87,8 +92,7 @@ public class NFSSecretManager implements SecretManager {
         String versionId = String.valueOf(System.nanoTime());
         SecretMetadata newMetadata = entry.metadata().updateVersion(versionId);
         _upsertEntry(secretId, new Entry(entry.value(), newMetadata));
-        return new SecretValue(
-                secretId, entry.value(), versionId, entry.metadata().createdAtMs());
+        return new SecretValue(secretId, entry.value(), versionId, entry.metadata().createdAtMs());
     }
 
     @Override
@@ -114,20 +118,15 @@ public class NFSSecretManager implements SecretManager {
             return List.of();
         }
         try {
-            return Files.walk(secretsBucketPath, 1)
-                    .filter(path -> path.getFileName().toString().endsWith(".metadata"))
+            return Files.walk(secretsBucketPath, 1).filter(path -> path.getFileName().toString().endsWith(".metadata"))
                     .map(path -> {
                         try (InputStream metadataStream = Files.newInputStream(path)) {
                             return JsonUtils.fromJson(metadataStream, SecretMetadata.class);
                         } catch (IOException e) {
-                            throw NFSUtils.wrapIOException(
-                                    e,
-                                    "listSecrets",
-                                    new BlobRef(
-                                            SECRETS_BUCKET, path.getFileName().toString()));
+                            throw NFSUtils.wrapIOException(e, "listSecrets",
+                                    new BlobRef(SECRETS_BUCKET, path.getFileName().toString()));
                         }
-                    })
-                    .toList();
+                    }).toList();
         } catch (IOException e) {
             throw NFSUtils.wrapIOException(e, "listSecrets", new BlobRef(SECRETS_BUCKET, null));
         }

@@ -23,6 +23,8 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Optional;
+import javax.annotation.concurrent.ThreadSafe;
+
 /**
  * GCP provider instance. Owns the SDK clients for a single configured GCP
  * project.
@@ -31,6 +33,7 @@ import java.util.Optional;
  * Call {@link #initialize()} before using any service. Call {@link #shutdown()}
  * when done to close all clients.
  */
+@ThreadSafe
 public class GcpCloudProvider implements CloudProvider {
 
     public static final String PROVIDER_NAME = "gcp";

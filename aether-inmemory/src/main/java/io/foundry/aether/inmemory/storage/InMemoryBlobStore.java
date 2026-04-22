@@ -15,10 +15,13 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import javax.annotation.concurrent.ThreadSafe;
 
+@ThreadSafe
 public class InMemoryBlobStore implements BlobStore {
 
-    private record StoredBlob(byte[] data, BlobMetadata metadata) {}
+    private record StoredBlob(byte[] data, BlobMetadata metadata) {
+    }
 
     private final InMemoryCloudProvider provider;
     private final ConcurrentHashMap<BlobRef, StoredBlob> store = new ConcurrentHashMap<>();
@@ -36,13 +39,8 @@ public class InMemoryBlobStore implements BlobStore {
     public BlobMetadata upload(UploadBlobRequest request) {
         try {
             byte[] bytes = request.data().readAllBytes();
-            var metadata = new BlobMetadata(
-                    request.bucket(),
-                    request.key(),
-                    bytes.length,
-                    request.contentType(),
-                    System.currentTimeMillis(),
-                    Map.of());
+            var metadata = new BlobMetadata(request.bucket(), request.key(), bytes.length, request.contentType(),
+                    System.currentTimeMillis(), Map.of());
             store.put(new BlobRef(request.bucket(), request.key()), new StoredBlob(bytes, metadata));
             return metadata;
         } catch (IOException e) {
@@ -61,11 +59,9 @@ public class InMemoryBlobStore implements BlobStore {
 
     @Override
     public ListBlobsResponse list(ListBlobsRequest request) {
-        List<BlobMetadata> blobs = store.entrySet().stream()
-                .filter(e -> e.getKey().bucket().equals(request.bucket())
-                        && e.getKey().key().startsWith(request.prefix()))
-                .map(e -> e.getValue().metadata())
-                .toList();
+        List<BlobMetadata> blobs = store.entrySet().stream().filter(
+                e -> e.getKey().bucket().equals(request.bucket()) && e.getKey().key().startsWith(request.prefix()))
+                .map(e -> e.getValue().metadata()).toList();
         return new ListBlobsResponse(blobs, null, false);
     }
 

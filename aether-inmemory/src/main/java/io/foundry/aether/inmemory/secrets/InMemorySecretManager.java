@@ -14,13 +14,16 @@ import io.foundry.aether.core.secrets.SecretValue;
 import io.foundry.aether.inmemory.InMemoryCloudProvider;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import javax.annotation.concurrent.ThreadSafe;
 
+@ThreadSafe
 public class InMemorySecretManager implements SecretManager {
 
     private final InMemoryCloudProvider provider;
     private final ConcurrentHashMap<String, Entry> secrets = new ConcurrentHashMap<>();
 
-    private record Entry(String value, SecretMetadata metadata) {}
+    private record Entry(String value, SecretMetadata metadata) {
+    }
 
     public InMemorySecretManager(InMemoryCloudProvider provider) {
         this.provider = provider;
@@ -37,23 +40,19 @@ public class InMemorySecretManager implements SecretManager {
         if (entry == null) {
             throw new ResourceNotFoundException(provider.name(), "getSecret", SECRET, secretId);
         }
-        return new SecretValue(
-                secretId,
-                entry.value(),
-                entry.metadata().versionId(),
-                entry.metadata().createdAtMs());
+        return new SecretValue(secretId, entry.value(), entry.metadata().versionId(), entry.metadata().createdAtMs());
     }
 
     @Override
     public SecretMetadata createSecret(String secretId, String value) {
-        if (secrets.containsKey(secretId)) {
-            throw new InvalidConfigurationException(
-                    provider.name(), "createSecret", "Secret already exists: " + secretId);
-        }
         String versionId = String.valueOf(System.nanoTime());
         long createdAt = System.currentTimeMillis();
         SecretMetadata metadata = new SecretMetadata(secretId, secretId, null, versionId, createdAt, 0L);
-        secrets.put(secretId, new Entry(value, metadata));
+        Entry previous = secrets.putIfAbsent(secretId, new Entry(value, metadata));
+        if (previous != null) {
+            throw new InvalidConfigurationException(provider.name(), "createSecret",
+                    "Secret already exists: " + secretId);
+        }
         return metadata;
     }
 
@@ -78,8 +77,7 @@ public class InMemorySecretManager implements SecretManager {
         String versionId = String.valueOf(System.nanoTime());
         SecretMetadata newMetadata = entry.metadata().updateVersion(versionId);
         secrets.put(secretId, new Entry(entry.value(), newMetadata));
-        return new SecretValue(
-                secretId, entry.value(), versionId, entry.metadata().createdAtMs());
+        return new SecretValue(secretId, entry.value(), versionId, entry.metadata().createdAtMs());
     }
 
     @Override

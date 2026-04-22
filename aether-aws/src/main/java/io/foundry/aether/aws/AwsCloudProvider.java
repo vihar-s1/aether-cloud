@@ -10,6 +10,7 @@ import io.foundry.aether.aws.internal.AwsUtils;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.ProviderStatus;
 import java.util.Optional;
+import javax.annotation.concurrent.ThreadSafe;
 import software.amazon.awssdk.services.ec2.Ec2Client;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
@@ -22,6 +23,7 @@ import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
  * Call {@link #initialize()} before using any service. Call {@link #shutdown()}
  * when done to close all clients.
  */
+@ThreadSafe
 public class AwsCloudProvider implements CloudProvider {
 
     public static final String PROVIDER_NAME = "aws";

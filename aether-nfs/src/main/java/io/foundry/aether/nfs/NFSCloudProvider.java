@@ -11,7 +11,9 @@ import io.foundry.aether.nfs.config.NfsProviderConfig;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
+import javax.annotation.concurrent.ThreadSafe;
 
+@ThreadSafe
 public class NFSCloudProvider implements CloudProvider {
 
     public static final String PROVIDER_NAME = "nfs";

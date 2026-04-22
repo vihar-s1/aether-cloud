@@ -18,6 +18,7 @@ import io.foundry.aether.core.storage.ListBlobsResponse;
 import io.foundry.aether.core.storage.UploadBlobRequest;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.exception.SdkClientException;
+import java.util.Map;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
@@ -28,7 +29,9 @@ import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import javax.annotation.concurrent.ThreadSafe;
 
+@ThreadSafe
 public class AwsS3BlobStore implements BlobStore {
 
     private final AwsCloudProvider provider;
@@ -50,10 +53,8 @@ public class AwsS3BlobStore implements BlobStore {
                 .contentType(request.contentType()).build();
         try {
             s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(request.data(), request.sizeBytes()));
-            var response = s3Client
-                    .headObject(HeadObjectRequest.builder().bucket(request.bucket()).key(request.key()).build());
-            return new BlobMetadata(request.bucket(), request.key(), response.contentLength(), request.contentType(),
-                    response.lastModified().toEpochMilli(), response.metadata());
+            return new BlobMetadata(request.bucket(), request.key(), request.sizeBytes(), request.contentType(),
+                    System.currentTimeMillis(), Map.of());
         } catch (AwsServiceException | SdkClientException e) {
             throw AwsUtils.wrapAwsException(e, "upload", BlobStore.BLOB, request.key(),
                     CloudErrorCodes.STORAGE_NOT_FOUND);
@@ -65,8 +66,7 @@ public class AwsS3BlobStore implements BlobStore {
         var getObjectRequest = GetObjectRequest.builder().bucket(ref.bucket()).key(ref.key()).build();
         try {
             var data = s3Client.getObject(getObjectRequest);
-            var response = s3Client.headObject(HeadObjectRequest.builder().bucket(ref.bucket()).key(ref.key()).build());
-
+            var response = data.response();
             var metadata = new BlobMetadata(ref.bucket(), ref.key(), response.contentLength(), response.contentType(),
                     response.lastModified().toEpochMilli(), response.metadata());
             return new BlobContent(data, metadata);

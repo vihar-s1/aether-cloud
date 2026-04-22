@@ -19,7 +19,15 @@ import java.io.InputStream;
 import java.nio.file.*;
 import java.util.List;
 import java.util.Map;
+import javax.annotation.concurrent.NotThreadSafe;
 
+/**
+ * Not thread-safe: filesystem operations (exists-check, read, write) are not
+ * atomic. Concurrent access to the same blob path from multiple threads or
+ * processes can produce torn reads or lost writes. The NFS provider is intended
+ * for single-threaded development and testing use only.
+ */
+@NotThreadSafe
 public class NFSBlobStore implements BlobStore {
 
     private final NFSCloudProvider provider;
@@ -38,13 +46,8 @@ public class NFSBlobStore implements BlobStore {
         try (InputStream inputStream = request.data()) {
             Path path = FileUtils.ensurePathExists(provider.basePath(), request.bucket(), request.key());
             Files.copy(inputStream, path, StandardCopyOption.REPLACE_EXISTING);
-            return new BlobMetadata(
-                    request.bucket(),
-                    request.key(),
-                    Files.size(path),
-                    request.contentType(),
-                    System.currentTimeMillis(),
-                    Map.of());
+            return new BlobMetadata(request.bucket(), request.key(), Files.size(path), request.contentType(),
+                    System.currentTimeMillis(), Map.of());
         } catch (IOException e) {
             throw wrapIOException(e, "upload", new BlobRef(request.bucket(), request.key()));
         }
@@ -57,13 +60,8 @@ public class NFSBlobStore implements BlobStore {
             if (!Files.exists(path)) {
                 throw new ResourceNotFoundException(provider.name(), "download", BlobStore.BLOB, ref.getId());
             }
-            BlobMetadata metadata = new BlobMetadata(
-                    ref.bucket(),
-                    ref.key(),
-                    Files.size(path),
-                    Files.probeContentType(path),
-                    System.currentTimeMillis(),
-                    Map.of());
+            BlobMetadata metadata = new BlobMetadata(ref.bucket(), ref.key(), Files.size(path),
+                    Files.probeContentType(path), System.currentTimeMillis(), Map.of());
             return new BlobContent(Files.newInputStream(path), metadata);
         } catch (IOException e) {
             throw wrapIOException(e, "download", ref);
@@ -84,13 +82,8 @@ public class NFSBlobStore implements BlobStore {
             List<BlobMetadata> blobs = CollectionUtils.transformList(files, p -> {
                 String key = path.relativize(p).toString();
                 try {
-                    return new BlobMetadata(
-                            request.bucket(),
-                            key,
-                            Files.size(p),
-                            Files.probeContentType(p),
-                            System.currentTimeMillis(),
-                            Map.of());
+                    return new BlobMetadata(request.bucket(), key, Files.size(p), Files.probeContentType(p),
+                            System.currentTimeMillis(), Map.of());
                 } catch (IOException e) {
                     throw wrapIOException(e, "list", new BlobRef(request.bucket(), key));
                 }
@@ -122,13 +115,8 @@ public class NFSBlobStore implements BlobStore {
             if (!Files.exists(path)) {
                 throw new ResourceNotFoundException(provider.name(), "getMetadata", BlobStore.BLOB, ref.getId());
             }
-            return new BlobMetadata(
-                    ref.bucket(),
-                    ref.key(),
-                    Files.size(path),
-                    Files.probeContentType(path),
-                    System.currentTimeMillis(),
-                    Map.of());
+            return new BlobMetadata(ref.bucket(), ref.key(), Files.size(path), Files.probeContentType(path),
+                    System.currentTimeMillis(), Map.of());
         } catch (IOException e) {
             throw wrapIOException(e, "getMetadata", ref);
         }

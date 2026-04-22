@@ -25,9 +25,12 @@ import io.foundry.aether.core.storage.UploadBlobRequest;
 import io.foundry.aether.gcp.GcpCloudProvider;
 import io.foundry.aether.gcp.internal.GcpUtils;
 import java.io.ByteArrayInputStream;
+import javax.annotation.concurrent.ThreadSafe;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
+@ThreadSafe
 public class GcpBlobStore implements BlobStore {
 
     private final GcpCloudProvider provider;

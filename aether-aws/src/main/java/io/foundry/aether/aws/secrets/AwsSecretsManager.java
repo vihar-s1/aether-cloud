@@ -26,7 +26,9 @@ import software.amazon.awssdk.services.secretsmanager.model.ListSecretsResponse;
 import software.amazon.awssdk.services.secretsmanager.model.PutSecretValueRequest;
 import software.amazon.awssdk.services.secretsmanager.model.PutSecretValueResponse;
 import software.amazon.awssdk.services.secretsmanager.model.SecretListEntry;
+import javax.annotation.concurrent.ThreadSafe;
 
+@ThreadSafe
 public class AwsSecretsManager implements SecretManager {
 
     private final AwsCloudProvider provider;
@@ -68,13 +70,9 @@ public class AwsSecretsManager implements SecretManager {
     @Override
     public SecretMetadata updateSecret(String secretId, String value) {
         try {
-            GetSecretValueResponse existing = secretsClient
-                    .getSecretValue(GetSecretValueRequest.builder().secretId(secretId).build());
             PutSecretValueResponse response = secretsClient
                     .putSecretValue(PutSecretValueRequest.builder().secretId(secretId).secretString(value).build());
-            return new SecretMetadata(secretId, existing.name(), null, response.versionId(),
-                    existing.createdDate() != null ? existing.createdDate().toEpochMilli() : 0L,
-                    System.currentTimeMillis());
+            return new SecretMetadata(secretId, secretId, null, response.versionId(), 0L, System.currentTimeMillis());
         } catch (AwsServiceException | SdkClientException e) {
             throw AwsUtils.wrapAwsException(e, "updateSecret", SECRET, secretId, CloudErrorCodes.SECRET_NOT_FOUND);
         }

@@ -19,7 +19,6 @@ import io.foundry.aether.core.compute.InstanceInfo;
 import io.foundry.aether.core.compute.InstanceState;
 import io.foundry.aether.core.exception.CloudErrorCodes;
 import io.foundry.aether.core.exception.OperationNotSupportedException;
-import io.foundry.aether.core.exception.ResourceNotFoundException;
 import io.foundry.aether.gcp.GcpCloudProvider;
 import io.foundry.aether.gcp.internal.GcpUtils;
 import java.time.OffsetDateTime;
@@ -28,6 +27,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import javax.annotation.concurrent.ThreadSafe;
+
+@ThreadSafe
 public class GcpComputeEngine implements ComputeEngine {
 
     private final GcpCloudProvider provider;
@@ -63,7 +65,7 @@ public class GcpComputeEngine implements ComputeEngine {
             InsertInstanceRequest request = InsertInstanceRequest.newBuilder().setProject(projectId).setZone(zone)
                     .setInstanceResource(instanceResource).build();
             instancesClient.insertAsync(request).get();
-            return _waitForState(config.name(), InstanceState.RUNNING, 30);
+            return getInstance(config.name());
         } catch (ExecutionException e) {
             Exception cause = e.getCause() instanceof Exception ex ? ex : e;
             throw GcpUtils.wrapGcpException(cause, "createInstance", INSTANCE, config.name(),
@@ -103,30 +105,12 @@ public class GcpComputeEngine implements ComputeEngine {
         try {
             List<InstanceInfo> result = new ArrayList<>();
             for (Instance instance : instancesClient.list(projectId, zone).iterateAll()) {
-                if (!"TERMINATED".equalsIgnoreCase(instance.getStatus())) {
-                    result.add(_instanceToInfo(instance));
-                }
+                result.add(_instanceToInfo(instance));
             }
             return result;
         } catch (ApiException e) {
             throw GcpUtils.wrapGcpException(e, "listInstances", INSTANCE, null, CloudErrorCodes.COMPUTE_NOT_FOUND);
         }
-    }
-
-    private InstanceInfo _waitForState(String instanceId, InstanceState target, int maxAttempts)
-            throws InterruptedException {
-        for (int i = 0; i < maxAttempts; i++) {
-            try {
-                InstanceInfo info = getInstance(instanceId);
-                if (info.state() == target) {
-                    return info;
-                }
-            } catch (ResourceNotFoundException ignored) {
-                // instance not yet visible
-            }
-            Thread.sleep(500);
-        }
-        return getInstance(instanceId);
     }
 
     private InstanceInfo _instanceToInfo(Instance instance) {
