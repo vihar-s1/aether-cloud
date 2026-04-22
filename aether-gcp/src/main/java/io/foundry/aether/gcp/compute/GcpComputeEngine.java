@@ -103,11 +103,11 @@ public class GcpComputeEngine implements ComputeEngine {
     @Override
     public List<InstanceInfo> listInstances() {
         try {
-            List<InstanceInfo> result = new ArrayList<>();
+            List<InstanceInfo> instances = new ArrayList<>();
             for (Instance instance : instancesClient.list(projectId, zone).iterateAll()) {
-                result.add(_instanceToInfo(instance));
+                instances.add(_instanceToInfo(instance));
             }
-            return result;
+            return instances;
         } catch (ApiException e) {
             throw GcpUtils.wrapGcpException(e, "listInstances", INSTANCE, null, CloudErrorCodes.COMPUTE_NOT_FOUND);
         }
@@ -128,8 +128,8 @@ public class GcpComputeEngine implements ComputeEngine {
         }
         Map<String, String> tags = new HashMap<>(instance.getLabelsMap());
         long createdAt = _parseTimestamp(instance.getCreationTimestamp());
-        return new InstanceInfo(instance.getName(), instance.getName(), _mapInstanceState(instance.getStatus()),
-                publicIp, privateIp, createdAt, tags);
+        return new InstanceInfo(String.valueOf(instance.getId()), instance.getName(),
+                _mapInstanceState(instance.getStatus()), publicIp, privateIp, createdAt, tags);
     }
 
     private InstanceState _mapInstanceState(String gcpStatus) {

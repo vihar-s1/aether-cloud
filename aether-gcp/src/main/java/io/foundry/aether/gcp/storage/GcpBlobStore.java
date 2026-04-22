@@ -29,6 +29,7 @@ import javax.annotation.concurrent.ThreadSafe;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @ThreadSafe
 public class GcpBlobStore implements BlobStore {
@@ -89,7 +90,12 @@ public class GcpBlobStore implements BlobStore {
             var page = storage.list(request.bucket(), opts.toArray(new Storage.BlobListOption[0]));
             List<BlobMetadata> blobs = new ArrayList<>();
             for (Blob blob : page.getValues()) {
-                blobs.add(_toMetadata(request.bucket(), blob.getName(), blob, blob.getContentType()));
+                blobs.add(new BlobMetadata(request.bucket(), blob.getName(),
+                        blob.getSize() != null ? blob.getSize() : 0L, null,
+                        blob.getUpdateTimeOffsetDateTime() != null
+                                ? blob.getUpdateTimeOffsetDateTime().toInstant().toEpochMilli()
+                                : 0L,
+                        Map.of()));
             }
             String nextCursor = page.getNextPageToken();
             return new ListBlobsResponse(blobs, nextCursor, !StringUtils.isEmpty(nextCursor));

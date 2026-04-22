@@ -23,6 +23,7 @@ import io.foundry.aether.core.secrets.SecretMetadata;
 import io.foundry.aether.core.secrets.SecretValue;
 import io.foundry.aether.gcp.GcpCloudProvider;
 import io.foundry.aether.gcp.internal.GcpUtils;
+import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -116,11 +117,10 @@ public class GcpSecretManager implements SecretManager {
     @Override
     public List<SecretMetadata> listSecrets() {
         try {
-            List<SecretMetadata> result = new java.util.ArrayList<>();
+            List<SecretMetadata> result = new ArrayList<>();
             for (Secret secret : client.listSecrets(ProjectName.of(projectId)).iterateAll()) {
                 String id = _secretId(secret.getName());
-                long createdAt = _toMillis(secret.getCreateTime());
-                result.add(new SecretMetadata(id, id, null, null, createdAt, 0L));
+                result.add(new SecretMetadata(id, id, null, null, _toMillis(secret.getCreateTime()), 0L));
             }
             return result;
         } catch (ApiException e) {

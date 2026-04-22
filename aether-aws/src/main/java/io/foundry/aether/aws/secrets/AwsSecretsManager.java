@@ -21,8 +21,6 @@ import software.amazon.awssdk.services.secretsmanager.model.CreateSecretResponse
 import software.amazon.awssdk.services.secretsmanager.model.DeleteSecretRequest;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueResponse;
-import software.amazon.awssdk.services.secretsmanager.model.ListSecretsRequest;
-import software.amazon.awssdk.services.secretsmanager.model.ListSecretsResponse;
 import software.amazon.awssdk.services.secretsmanager.model.PutSecretValueRequest;
 import software.amazon.awssdk.services.secretsmanager.model.PutSecretValueResponse;
 import software.amazon.awssdk.services.secretsmanager.model.SecretListEntry;
@@ -106,8 +104,9 @@ public class AwsSecretsManager implements SecretManager {
     @Override
     public List<SecretMetadata> listSecrets() {
         try {
-            ListSecretsResponse response = secretsClient.listSecrets(ListSecretsRequest.builder().build());
-            return response.secretList().stream().map(this::_entryToMetadata).toList();
+            var response = secretsClient.listSecretsPaginator(
+                    software.amazon.awssdk.services.secretsmanager.model.ListSecretsRequest.builder().build());
+            return response.stream().flatMap(page -> page.secretList().stream()).map(this::_entryToMetadata).toList();
         } catch (AwsServiceException | SdkClientException e) {
             throw AwsUtils.wrapAwsException(e, "listSecrets", SECRET, null, CloudErrorCodes.SECRET_NOT_FOUND);
         }

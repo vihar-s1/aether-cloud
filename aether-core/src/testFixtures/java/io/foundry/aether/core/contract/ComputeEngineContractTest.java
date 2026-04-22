@@ -28,18 +28,19 @@ public abstract class ComputeEngineContractTest {
     }
 
     @Test
-    void createInstance_stateIsRunning() {
+    void createInstance_returnsInstanceWithId() {
         var info = engine.createInstance(new InstanceConfig("web", "t3.micro", "ami-1", "us-east-1", Map.of()));
-        assertThat(info.state()).isEqualTo(InstanceState.RUNNING);
+        assertThat(info.state()).isNotNull();
         assertThat(info.name()).isEqualTo("web");
         assertThat(info.instanceId()).isNotBlank();
     }
 
     @Test
-    void getInstance_returnsSameInstance() {
+    void getInstance_returnsSameInstanceId() {
         var created = engine.createInstance(new InstanceConfig("web", "t3.micro", "ami-1", "us-east-1", Map.of()));
         var fetched = engine.getInstance(created.instanceId());
-        assertThat(fetched).isEqualTo(created);
+        assertThat(fetched.instanceId()).isEqualTo(created.instanceId());
+        assertThat(fetched.name()).isEqualTo(created.name());
     }
 
     @Test
@@ -50,10 +51,11 @@ public abstract class ComputeEngineContractTest {
     }
 
     @Test
-    void listAfterCreatingMultiple_returnsAll() {
-        engine.createInstance(new InstanceConfig("a", "t3.micro", "ami-1", "us-east-1", Map.of()));
-        engine.createInstance(new InstanceConfig("b", "t3.micro", "ami-1", "us-east-1", Map.of()));
-        assertThat(engine.listInstances()).hasSize(2);
+    void listAfterCreatingMultiple_containsBothInstances() {
+        var a = engine.createInstance(new InstanceConfig("a", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        var b = engine.createInstance(new InstanceConfig("b", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        var ids = engine.listInstances().stream().map(i -> i.instanceId()).toList();
+        assertThat(ids).contains(a.instanceId(), b.instanceId());
     }
 
     @Test

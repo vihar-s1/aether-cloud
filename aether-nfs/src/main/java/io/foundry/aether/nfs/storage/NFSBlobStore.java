@@ -83,7 +83,7 @@ public class NFSBlobStore implements BlobStore {
                 String key = path.relativize(p).toString();
                 try {
                     return new BlobMetadata(request.bucket(), key, Files.size(p), Files.probeContentType(p),
-                            System.currentTimeMillis(), Map.of());
+                            Files.getLastModifiedTime(p).toMillis(), Map.of());
                 } catch (IOException e) {
                     throw wrapIOException(e, "list", new BlobRef(request.bucket(), key));
                 }

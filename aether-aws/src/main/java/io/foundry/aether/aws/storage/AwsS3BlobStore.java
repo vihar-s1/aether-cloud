@@ -88,7 +88,7 @@ public class AwsS3BlobStore implements BlobStore {
                     new BlobRef(request.bucket(), request.prefix()).getId(), CloudErrorCodes.STORAGE_NOT_FOUND);
         }
         var blobs = response.contents().stream().map(s3Object -> new BlobMetadata(request.bucket(), s3Object.key(),
-                s3Object.size(), null, s3Object.lastModified().toEpochMilli(), null)).toList();
+                s3Object.size(), null, s3Object.lastModified().toEpochMilli(), Map.of())).toList();
         return new ListBlobsResponse(blobs, response.nextContinuationToken(), response.isTruncated());
     }
 
