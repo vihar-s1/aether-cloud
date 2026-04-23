@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
+import java.util.stream.Stream;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -85,28 +86,44 @@ public class NFSBlobStore implements BlobStore {
         }
     }
 
+    /**
+     * Offset-based pagination only — cursor is ignored and {@link ListResponse#nextCursor()}
+     * is always {@code null}. The directory is walked in full to sort paths, but
+     * file metadata (size, mtime, content-type) is read only for the requested page.
+     */
     @Override
     public ListResponse<BlobMetadata> list(ListBlobsRequest request) {
         Path bucketPath = Path.of(provider.basePath()).resolve(request.bucket());
         if (!Files.exists(bucketPath)) {
             return ListResponse.empty();
         }
-        try {
-            List<Path> files = FileUtils.filterFiles(bucketPath, p -> {
-                String relativePath = bucketPath.relativize(p).toString();
-                return !relativePath.startsWith(".tmp-")
-                        && (request.prefix() == null || relativePath.startsWith(request.prefix()));
-            });
-            List<BlobMetadata> all = files.stream().sorted(Comparator.comparing(Path::toString)).map(p -> {
-                String key = bucketPath.relativize(p).toString();
-                try {
-                    return new BlobMetadata(request.bucket(), key, Files.size(p), Files.probeContentType(p),
-                            Files.getLastModifiedTime(p).toMillis(), Map.of());
-                } catch (IOException e) {
-                    throw wrapIOException(e, "list", new BlobRef(request.bucket(), key));
-                }
-            }).toList();
-            return ListResponse.ofPage(all, request);
+        int offset = request.offset() != null ? request.offset() : 0;
+        try (Stream<Path> walk = Files.walk(bucketPath)) {
+            Stream<Path> filtered = walk
+                    .filter(Files::isRegularFile)
+                    .filter(p -> {
+                        String rel = bucketPath.relativize(p).toString();
+                        return !rel.startsWith(".tmp-")
+                                && (request.prefix() == null || rel.startsWith(request.prefix()));
+                    })
+                    .sorted(Comparator.comparing(Path::toString))
+                    .skip(offset);
+
+            List<Path> page;
+            boolean hasMore;
+            if (request.limit() != null) {
+                page = filtered.limit(request.limit() + 1L).toList();
+                hasMore = page.size() > request.limit();
+                if (hasMore) page = page.subList(0, request.limit());
+            } else {
+                page = filtered.toList();
+                hasMore = false;
+            }
+
+            List<BlobMetadata> items = page.stream()
+                    .map(p -> _toMetadata(request.bucket(), bucketPath, p))
+                    .toList();
+            return new ListResponse<>(items, null, hasMore);
         } catch (IOException e) {
             throw wrapIOException(e, "list", new BlobRef(request.bucket(), request.prefix()));
         }
@@ -142,6 +159,16 @@ public class NFSBlobStore implements BlobStore {
                     Files.getLastModifiedTime(path).toMillis(), Map.of());
         } catch (IOException e) {
             throw wrapIOException(e, "getMetadata", ref);
+        }
+    }
+
+    private BlobMetadata _toMetadata(String bucket, Path bucketPath, Path p) {
+        String key = bucketPath.relativize(p).toString();
+        try {
+            return new BlobMetadata(bucket, key, Files.size(p), Files.probeContentType(p),
+                    Files.getLastModifiedTime(p).toMillis(), Map.of());
+        } catch (IOException e) {
+            throw wrapIOException(e, "list", new BlobRef(bucket, key));
         }
     }
 

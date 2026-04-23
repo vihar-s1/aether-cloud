@@ -29,16 +29,24 @@ public interface BlobStore extends CloudService {
     BlobContent download(BlobRef ref);
 
     /**
-     * Lists blobs in a bucket page by page. Pass
-     * {@link ListBlobsRequest#first(String)} to start from the beginning; use
-     * {@link ListResponse#nextCursor()} to advance.
+     * Lists blobs in a bucket page by page.
      *
      * <p>
-     * Note: the {@code contentType} and {@code metadata} fields of each returned
-     * {@link BlobMetadata} may be {@code null} or empty for cloud providers (AWS,
-     * GCP) because list APIs do not return per-object metadata. Use
-     * {@link #getMetadata(BlobRef)} to obtain the full metadata for a specific
-     * blob.
+     * <b>Pagination support varies by provider</b> — not all providers support
+     * both cursor-based and offset-based modes:
+     * <ul>
+     * <li>AWS S3: cursor-based only ({@link ListBlobsRequest#withCursor}); offset
+     * is ignored.</li>
+     * <li>NFS: offset-based only ({@link ListBlobsRequest#withOffset}); cursor is
+     * ignored. {@link ListResponse#nextCursor()} is always {@code null}.</li>
+     * <li>In-memory: both modes supported.</li>
+     * </ul>
+     *
+     * <p>
+     * Note: {@code contentType} and {@code metadata} fields may be {@code null} or
+     * empty for cloud providers (AWS, GCP) because their list APIs do not return
+     * per-object metadata. Use {@link #getMetadata(BlobRef)} to fetch full metadata
+     * for a specific blob.
      */
     ListResponse<BlobMetadata> list(ListBlobsRequest request);
 
