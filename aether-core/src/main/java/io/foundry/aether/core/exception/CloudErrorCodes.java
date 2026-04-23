@@ -9,6 +9,7 @@ public interface CloudErrorCodes {
 
     // resource
     String RESOURCE_NOT_FOUND = "aether.resource.not_found";
+    String RESOURCE_ALREADY_EXISTS = "aether.resource.already_exists";
     String RESOURCE_EXHAUSTED = "aether.resource.exhausted";
 
     // storage

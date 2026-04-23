@@ -14,6 +14,7 @@ import io.foundry.aether.core.exception.GenericCloudException;
 import io.foundry.aether.core.exception.PermissionDeniedException;
 import io.foundry.aether.core.exception.ProviderUnavailableException;
 import io.foundry.aether.core.exception.QuotaExceededException;
+import io.foundry.aether.core.exception.ResourceAlreadyExistsException;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
 import io.foundry.aether.core.internal.ExceptionUtils;
 import java.net.URI;
@@ -55,6 +56,10 @@ public final class AwsUtils {
         if (e instanceof software.amazon.awssdk.services.secretsmanager.model.ResourceNotFoundException) {
             return new ResourceNotFoundException(AwsCloudProvider.PROVIDER_NAME, operation, resourceType, resourceId, e,
                     defaultErrorCode);
+        }
+        if (e instanceof software.amazon.awssdk.services.secretsmanager.model.ResourceExistsException) {
+            return new ResourceAlreadyExistsException(AwsCloudProvider.PROVIDER_NAME, operation, resourceType,
+                    resourceId, e);
         }
         if (e instanceof AwsServiceException awsEx) {
             String errorCode = awsEx.awsErrorDetails() != null ? awsEx.awsErrorDetails().errorCode() : "";

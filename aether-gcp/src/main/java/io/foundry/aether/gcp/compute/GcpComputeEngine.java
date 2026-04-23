@@ -20,6 +20,7 @@ import io.foundry.aether.core.compute.InstanceState;
 import io.foundry.aether.core.ListRequest;
 import io.foundry.aether.core.ListResponse;
 import io.foundry.aether.core.exception.CloudErrorCodes;
+import io.foundry.aether.core.exception.GenericCloudException;
 import io.foundry.aether.core.exception.OperationNotSupportedException;
 import io.foundry.aether.gcp.GcpCloudProvider;
 import io.foundry.aether.gcp.internal.GcpUtils;
@@ -74,7 +75,8 @@ public class GcpComputeEngine implements ComputeEngine {
                     CloudErrorCodes.COMPUTE_NOT_FOUND);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted while waiting for instance to start", e);
+            throw new GenericCloudException(GcpCloudProvider.PROVIDER_NAME, "createInstance", CloudErrorCodes.UNKNOWN,
+                    "Interrupted while waiting for instance to start", e);
         }
     }
 
@@ -88,7 +90,8 @@ public class GcpComputeEngine implements ComputeEngine {
                     CloudErrorCodes.COMPUTE_NOT_FOUND);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted while waiting for instance to terminate", e);
+            throw new GenericCloudException(GcpCloudProvider.PROVIDER_NAME, "terminateInstance", CloudErrorCodes.UNKNOWN,
+                    "Interrupted while waiting for instance to terminate", e);
         }
     }
 
