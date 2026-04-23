@@ -54,7 +54,6 @@ public interface CloudProvider extends AutoCloseable {
      */
     void shutdown();
 
-    /** Returns the current lifecycle status of this provider. */
     ProviderStatus status();
 
     /**

@@ -27,12 +27,7 @@ import java.util.List;
 import java.util.Map;
 import javax.annotation.concurrent.NotThreadSafe;
 
-/**
- * Not thread-safe: filesystem operations (exists-check, read, write) are not
- * atomic. Concurrent access to the same blob path from multiple threads or
- * processes can produce torn reads or lost writes. The NFS provider is intended
- * for single-threaded development and testing use only.
- */
+/** Filesystem operations are non-atomic; intended for single-threaded development only. */
 @NotThreadSafe
 public class NFSBlobStore implements BlobStore {
 

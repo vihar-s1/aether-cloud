@@ -23,17 +23,8 @@ package io.foundry.aether.core;
  * SHUTDOWN is terminal — construct a new provider to start again.
  */
 public enum ProviderStatus {
-    /** Freshly constructed, {@code initialize()} has not been called yet. */
     UNINITIALIZED,
-    /**
-     * {@code initialize()} completed successfully; the provider is ready to use.
-     */
     RUNNING,
-    /** {@code initialize()} threw; {@code initialize()} may be retried. */
     FAILED,
-    /**
-     * {@code shutdown()} was called; terminal state — create a new instance to
-     * reuse.
-     */
     SHUTDOWN
 }

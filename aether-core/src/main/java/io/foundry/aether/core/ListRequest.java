@@ -47,22 +47,18 @@ public class ListRequest<T> {
         return limit;
     }
 
-    /** Start from the first page with no cursor and no offset. */
     public static <T> ListRequest<T> first() {
         return new ListRequest<>(null, null, null);
     }
 
-    /** Resume cursor-based pagination from the given cursor token. */
     public static <T> ListRequest<T> withCursor(String cursor) {
         return new ListRequest<>(cursor, null, null);
     }
 
-    /** Resume cursor-based pagination with an explicit page size. */
     public static <T> ListRequest<T> withCursor(String cursor, int pageSize) {
         return new ListRequest<>(cursor, null, pageSize);
     }
 
-    /** Use offset-based pagination with the given position and page size. */
     public static <T> ListRequest<T> withOffset(int offset, int limit) {
         return new ListRequest<>(null, offset, limit);
     }

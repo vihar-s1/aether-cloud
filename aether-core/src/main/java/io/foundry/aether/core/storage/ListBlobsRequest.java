@@ -28,32 +28,27 @@ public final class ListBlobsRequest extends ListRequest<BlobMetadata> {
         return bucket;
     }
 
-    /** Optional key prefix filter; {@code null} or empty matches all keys. */
+    /** {@code null} matches all keys. */
     public String prefix() {
         return prefix;
     }
 
-    /** Start from the first page for the given bucket (no prefix filter). */
     public static ListBlobsRequest first(String bucket) {
         return new ListBlobsRequest(bucket, null, null, null, null);
     }
 
-    /** Start from the first page for the given bucket and key prefix. */
     public static ListBlobsRequest first(String bucket, String prefix) {
         return new ListBlobsRequest(bucket, prefix, null, null, null);
     }
 
-    /** Resume cursor-based pagination. */
     public static ListBlobsRequest withCursor(String bucket, String prefix, String cursor) {
         return new ListBlobsRequest(bucket, prefix, cursor, null, null);
     }
 
-    /** Resume cursor-based pagination with an explicit page size. */
     public static ListBlobsRequest withCursor(String bucket, String prefix, String cursor, int pageSize) {
         return new ListBlobsRequest(bucket, prefix, cursor, null, pageSize);
     }
 
-    /** Use offset-based pagination. */
     public static ListBlobsRequest withOffset(String bucket, String prefix, int offset, int limit) {
         return new ListBlobsRequest(bucket, prefix, null, offset, limit);
     }

@@ -27,12 +27,7 @@ import java.util.Comparator;
 import java.util.List;
 import javax.annotation.concurrent.NotThreadSafe;
 
-/**
- * Not thread-safe: each secret is stored as two separate files (value +
- * metadata). Concurrent reads and writes are not atomic — a reader can observe
- * a new value paired with old metadata or vice versa. The NFS provider is
- * intended for single-threaded development and testing use only.
- */
+/** Each secret is two files (value + metadata); reads and writes are non-atomic. Single-threaded use only. */
 @NotThreadSafe
 public class NFSSecretManager implements SecretManager {
 
