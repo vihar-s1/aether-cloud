@@ -6,12 +6,19 @@
 package io.foundry.aether.inmemory.storage;
 
 import io.foundry.aether.core.CloudProvider;
+import io.foundry.aether.core.ListResponse;
 import io.foundry.aether.core.exception.ProviderUnavailableException;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
-import io.foundry.aether.core.storage.*;
+import io.foundry.aether.core.storage.BlobContent;
+import io.foundry.aether.core.storage.BlobMetadata;
+import io.foundry.aether.core.storage.BlobRef;
+import io.foundry.aether.core.storage.BlobStore;
+import io.foundry.aether.core.storage.ListBlobsRequest;
+import io.foundry.aether.core.storage.UploadBlobRequest;
 import io.foundry.aether.inmemory.InMemoryCloudProvider;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -58,11 +65,12 @@ public class InMemoryBlobStore implements BlobStore {
     }
 
     @Override
-    public ListBlobsResponse list(ListBlobsRequest request) {
-        List<BlobMetadata> blobs = store.entrySet().stream().filter(
-                e -> e.getKey().bucket().equals(request.bucket()) && e.getKey().key().startsWith(request.prefix()))
-                .map(e -> e.getValue().metadata()).toList();
-        return new ListBlobsResponse(blobs, null, false);
+    public ListResponse<BlobMetadata> list(ListBlobsRequest request) {
+        List<BlobMetadata> all = store.entrySet().stream()
+                .filter(e -> e.getKey().bucket().equals(request.bucket())
+                        && (request.prefix() == null || e.getKey().key().startsWith(request.prefix())))
+                .map(e -> e.getValue().metadata()).sorted(Comparator.comparing(BlobMetadata::key)).toList();
+        return ListResponse.ofPage(all, request);
     }
 
     @Override

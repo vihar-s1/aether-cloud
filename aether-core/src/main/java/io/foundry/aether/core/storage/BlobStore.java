@@ -6,6 +6,7 @@
 package io.foundry.aether.core.storage;
 
 import io.foundry.aether.core.CloudService;
+import io.foundry.aether.core.ListResponse;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
 
 public interface BlobStore extends CloudService {
@@ -28,8 +29,9 @@ public interface BlobStore extends CloudService {
     BlobContent download(BlobRef ref);
 
     /**
-     * Lists blobs page by page. Pass a {@link ListBlobsRequest} with a {@code null}
-     * cursor to start from the beginning.
+     * Lists blobs in a bucket page by page. Pass
+     * {@link ListBlobsRequest#first(String)} to start from the beginning; use
+     * {@link ListResponse#nextCursor()} to advance.
      *
      * <p>
      * Note: the {@code contentType} and {@code metadata} fields of each returned
@@ -38,7 +40,7 @@ public interface BlobStore extends CloudService {
      * {@link #getMetadata(BlobRef)} to obtain the full metadata for a specific
      * blob.
      */
-    ListBlobsResponse list(ListBlobsRequest request);
+    ListResponse<BlobMetadata> list(ListBlobsRequest request);
 
     /**
      * Deletes a blob. This operation is idempotent — deleting a blob that does not

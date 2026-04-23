@@ -18,6 +18,8 @@ import com.google.cloud.secretmanager.v1.SecretVersionName;
 import com.google.protobuf.ByteString;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.exception.CloudErrorCodes;
+import io.foundry.aether.core.ListRequest;
+import io.foundry.aether.core.ListResponse;
 import io.foundry.aether.core.secrets.SecretManager;
 import io.foundry.aether.core.secrets.SecretMetadata;
 import io.foundry.aether.core.secrets.SecretValue;
@@ -115,14 +117,24 @@ public class GcpSecretManager implements SecretManager {
     }
 
     @Override
-    public List<SecretMetadata> listSecrets() {
+    public ListResponse<SecretMetadata> listSecrets(ListRequest<SecretMetadata> request) {
         try {
-            List<SecretMetadata> result = new ArrayList<>();
-            for (Secret secret : client.listSecrets(ProjectName.of(projectId)).iterateAll()) {
-                String id = _secretId(secret.getName());
-                result.add(new SecretMetadata(id, id, null, null, _toMillis(secret.getCreateTime()), 0L));
+            var gcpRequest = com.google.cloud.secretmanager.v1.ListSecretsRequest.newBuilder()
+                    .setParent(ProjectName.of(projectId).toString());
+            if (request.cursor() != null) {
+                gcpRequest.setPageToken(request.cursor());
             }
-            return result;
+            if (request.limit() != null) {
+                gcpRequest.setPageSize(request.limit());
+            }
+            var page = client.listSecrets(gcpRequest.build()).getPage();
+            List<SecretMetadata> secrets = new ArrayList<>();
+            for (Secret secret : page.getValues()) {
+                String id = _secretId(secret.getName());
+                secrets.add(new SecretMetadata(id, id, null, null, _toMillis(secret.getCreateTime()), 0L));
+            }
+            String nextCursor = page.getNextPageToken();
+            return new ListResponse<>(secrets, nextCursor.isEmpty() ? null : nextCursor, !nextCursor.isEmpty());
         } catch (ApiException e) {
             throw GcpUtils.wrapGcpException(e, "listSecrets", SECRET, null, CloudErrorCodes.SECRET_NOT_FOUND);
         }

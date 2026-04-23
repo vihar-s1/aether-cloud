@@ -8,10 +8,13 @@ package io.foundry.aether.inmemory.secrets;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.exception.InvalidConfigurationException;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
+import io.foundry.aether.core.ListRequest;
+import io.foundry.aether.core.ListResponse;
 import io.foundry.aether.core.secrets.SecretManager;
 import io.foundry.aether.core.secrets.SecretMetadata;
 import io.foundry.aether.core.secrets.SecretValue;
 import io.foundry.aether.inmemory.InMemoryCloudProvider;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.concurrent.ThreadSafe;
@@ -89,7 +92,9 @@ public class InMemorySecretManager implements SecretManager {
     }
 
     @Override
-    public List<SecretMetadata> listSecrets() {
-        return secrets.values().stream().map(Entry::metadata).toList();
+    public ListResponse<SecretMetadata> listSecrets(ListRequest<SecretMetadata> request) {
+        List<SecretMetadata> all = secrets.values().stream().map(Entry::metadata)
+                .sorted(Comparator.comparing(SecretMetadata::secretId)).toList();
+        return ListResponse.ofPage(all, request);
     }
 }

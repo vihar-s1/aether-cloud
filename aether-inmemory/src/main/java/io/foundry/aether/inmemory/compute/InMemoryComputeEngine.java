@@ -10,7 +10,10 @@ import io.foundry.aether.core.compute.ComputeEngine;
 import io.foundry.aether.core.compute.InstanceConfig;
 import io.foundry.aether.core.compute.InstanceInfo;
 import io.foundry.aether.core.compute.InstanceState;
+import io.foundry.aether.core.ListRequest;
+import io.foundry.aether.core.ListResponse;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -61,7 +64,9 @@ public class InMemoryComputeEngine implements ComputeEngine {
     }
 
     @Override
-    public List<InstanceInfo> listInstances() {
-        return List.copyOf(instances.values());
+    public ListResponse<InstanceInfo> listInstances(ListRequest<InstanceInfo> request) {
+        List<InstanceInfo> all = instances.values().stream().sorted(Comparator.comparing(InstanceInfo::instanceId))
+                .toList();
+        return ListResponse.ofPage(all, request);
     }
 }

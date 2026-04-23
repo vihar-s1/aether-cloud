@@ -73,15 +73,15 @@ public abstract class BlobStoreContractTest {
         store.upload(UploadBlobRequest.of("bkt", "logs/b.txt", new byte[0], "text/plain"));
         store.upload(UploadBlobRequest.of("bkt", "data/c.txt", new byte[0], "text/plain"));
 
-        var result = store.list(new ListBlobsRequest("bkt", "logs/", null));
-        assertThat(result.blobs()).hasSize(2);
-        assertThat(result.blobs()).allSatisfy(m -> assertThat(m.key()).startsWith("logs/"));
+        var result = store.list(ListBlobsRequest.first("bkt", "logs/"));
+        assertThat(result.items()).hasSize(2);
+        assertThat(result.items()).allSatisfy(m -> assertThat(m.key()).startsWith("logs/"));
     }
 
     @Test
     void listEmptyBucket_returnsEmpty() {
-        var result = store.list(new ListBlobsRequest("empty", "", null));
-        assertThat(result.blobs()).isEmpty();
+        var result = store.list(ListBlobsRequest.first("empty"));
+        assertThat(result.items()).isEmpty();
     }
 
     @Test

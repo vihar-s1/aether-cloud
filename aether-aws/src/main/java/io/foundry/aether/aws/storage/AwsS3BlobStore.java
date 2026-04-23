@@ -12,9 +12,9 @@ import io.foundry.aether.core.exception.CloudErrorCodes;
 import io.foundry.aether.core.storage.BlobContent;
 import io.foundry.aether.core.storage.BlobMetadata;
 import io.foundry.aether.core.storage.BlobRef;
+import io.foundry.aether.core.ListResponse;
 import io.foundry.aether.core.storage.BlobStore;
 import io.foundry.aether.core.storage.ListBlobsRequest;
-import io.foundry.aether.core.storage.ListBlobsResponse;
 import io.foundry.aether.core.storage.UploadBlobRequest;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.exception.SdkClientException;
@@ -77,9 +77,13 @@ public class AwsS3BlobStore implements BlobStore {
     }
 
     @Override
-    public ListBlobsResponse list(ListBlobsRequest request) {
-        var listRequest = ListObjectsV2Request.builder().bucket(request.bucket()).prefix(request.prefix())
-                .continuationToken(request.cursor()).build();
+    public ListResponse<BlobMetadata> list(ListBlobsRequest request) {
+        var reqBuilder = ListObjectsV2Request.builder().bucket(request.bucket()).prefix(request.prefix())
+                .continuationToken(request.cursor());
+        if (request.limit() != null) {
+            reqBuilder.maxKeys(request.limit());
+        }
+        var listRequest = reqBuilder.build();
         ListObjectsV2Response response;
         try {
             response = s3Client.listObjectsV2(listRequest);
@@ -89,7 +93,7 @@ public class AwsS3BlobStore implements BlobStore {
         }
         var blobs = response.contents().stream().map(s3Object -> new BlobMetadata(request.bucket(), s3Object.key(),
                 s3Object.size(), null, s3Object.lastModified().toEpochMilli(), Map.of())).toList();
-        return new ListBlobsResponse(blobs, response.nextContinuationToken(), response.isTruncated());
+        return new ListResponse<>(blobs, response.nextContinuationToken(), response.isTruncated());
     }
 
     @Override

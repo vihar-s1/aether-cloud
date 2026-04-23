@@ -17,6 +17,8 @@ import io.foundry.aether.core.compute.ComputeEngine;
 import io.foundry.aether.core.compute.InstanceConfig;
 import io.foundry.aether.core.compute.InstanceInfo;
 import io.foundry.aether.core.compute.InstanceState;
+import io.foundry.aether.core.ListRequest;
+import io.foundry.aether.core.ListResponse;
 import io.foundry.aether.core.exception.CloudErrorCodes;
 import io.foundry.aether.core.exception.OperationNotSupportedException;
 import io.foundry.aether.gcp.GcpCloudProvider;
@@ -101,13 +103,24 @@ public class GcpComputeEngine implements ComputeEngine {
     }
 
     @Override
-    public List<InstanceInfo> listInstances() {
+    public ListResponse<InstanceInfo> listInstances(ListRequest<InstanceInfo> request) {
         try {
+            var gcpRequest = com.google.cloud.compute.v1.ListInstancesRequest.newBuilder().setProject(projectId)
+                    .setZone(zone);
+            if (request.cursor() != null) {
+                gcpRequest.setPageToken(request.cursor());
+            }
+            if (request.limit() != null) {
+                gcpRequest.setMaxResults(request.limit());
+            }
+            var page = instancesClient.list(gcpRequest.build()).getPage();
             List<InstanceInfo> instances = new ArrayList<>();
-            for (Instance instance : instancesClient.list(projectId, zone).iterateAll()) {
+            for (Instance instance : page.getValues()) {
                 instances.add(_instanceToInfo(instance));
             }
-            return instances;
+            String nextCursor = page.getNextPageToken();
+            nextCursor = (nextCursor != null && !nextCursor.isEmpty()) ? nextCursor : null;
+            return new ListResponse<>(instances, nextCursor, nextCursor != null);
         } catch (ApiException e) {
             throw GcpUtils.wrapGcpException(e, "listInstances", INSTANCE, null, CloudErrorCodes.COMPUTE_NOT_FOUND);
         }

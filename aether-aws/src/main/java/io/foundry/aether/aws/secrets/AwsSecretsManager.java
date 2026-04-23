@@ -9,6 +9,8 @@ import io.foundry.aether.aws.AwsCloudProvider;
 import io.foundry.aether.aws.internal.AwsUtils;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.exception.CloudErrorCodes;
+import io.foundry.aether.core.ListRequest;
+import io.foundry.aether.core.ListResponse;
 import io.foundry.aether.core.secrets.SecretManager;
 import io.foundry.aether.core.secrets.SecretMetadata;
 import io.foundry.aether.core.secrets.SecretValue;
@@ -102,11 +104,15 @@ public class AwsSecretsManager implements SecretManager {
     }
 
     @Override
-    public List<SecretMetadata> listSecrets() {
+    public ListResponse<SecretMetadata> listSecrets(ListRequest<SecretMetadata> request) {
         try {
-            var response = secretsClient.listSecretsPaginator(
-                    software.amazon.awssdk.services.secretsmanager.model.ListSecretsRequest.builder().build());
-            return response.stream().flatMap(page -> page.secretList().stream()).map(this::_entryToMetadata).toList();
+            var reqBuilder = software.amazon.awssdk.services.secretsmanager.model.ListSecretsRequest.builder()
+                    .nextToken(request.cursor()).maxResults(request.limit());
+            var awsRequest = reqBuilder.build();
+            var response = secretsClient.listSecrets(awsRequest);
+            List<SecretMetadata> secrets = response.secretList().stream().map(this::_entryToMetadata).toList();
+            String nextCursor = response.nextToken();
+            return new ListResponse<>(secrets, nextCursor, nextCursor != null);
         } catch (AwsServiceException | SdkClientException e) {
             throw AwsUtils.wrapAwsException(e, "listSecrets", SECRET, null, CloudErrorCodes.SECRET_NOT_FOUND);
         }

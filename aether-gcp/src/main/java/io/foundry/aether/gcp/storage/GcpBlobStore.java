@@ -18,9 +18,9 @@ import io.foundry.aether.core.internal.StringUtils;
 import io.foundry.aether.core.storage.BlobContent;
 import io.foundry.aether.core.storage.BlobMetadata;
 import io.foundry.aether.core.storage.BlobRef;
+import io.foundry.aether.core.ListResponse;
 import io.foundry.aether.core.storage.BlobStore;
 import io.foundry.aether.core.storage.ListBlobsRequest;
-import io.foundry.aether.core.storage.ListBlobsResponse;
 import io.foundry.aether.core.storage.UploadBlobRequest;
 import io.foundry.aether.gcp.GcpCloudProvider;
 import io.foundry.aether.gcp.internal.GcpUtils;
@@ -78,7 +78,7 @@ public class GcpBlobStore implements BlobStore {
     }
 
     @Override
-    public ListBlobsResponse list(ListBlobsRequest request) {
+    public ListResponse<BlobMetadata> list(ListBlobsRequest request) {
         try {
             List<Storage.BlobListOption> opts = new ArrayList<>();
             if (request.prefix() != null && !request.prefix().isEmpty()) {
@@ -87,9 +87,12 @@ public class GcpBlobStore implements BlobStore {
             if (request.cursor() != null && !request.cursor().isEmpty()) {
                 opts.add(Storage.BlobListOption.pageToken(request.cursor()));
             }
-            var page = storage.list(request.bucket(), opts.toArray(new Storage.BlobListOption[0]));
+            if (request.limit() != null) {
+                opts.add(Storage.BlobListOption.pageSize(request.limit()));
+            }
+            var gcpPage = storage.list(request.bucket(), opts.toArray(new Storage.BlobListOption[0]));
             List<BlobMetadata> blobs = new ArrayList<>();
-            for (Blob blob : page.getValues()) {
+            for (Blob blob : gcpPage.getValues()) {
                 blobs.add(new BlobMetadata(request.bucket(), blob.getName(),
                         blob.getSize() != null ? blob.getSize() : 0L, null,
                         blob.getUpdateTimeOffsetDateTime() != null
@@ -97,8 +100,8 @@ public class GcpBlobStore implements BlobStore {
                                 : 0L,
                         Map.of()));
             }
-            String nextCursor = page.getNextPageToken();
-            return new ListBlobsResponse(blobs, nextCursor, !StringUtils.isEmpty(nextCursor));
+            String nextCursor = gcpPage.getNextPageToken();
+            return new ListResponse<>(blobs, nextCursor, !StringUtils.isEmpty(nextCursor));
         } catch (StorageException e) {
             throw GcpUtils.wrapGcpException(e, "list", BLOB, new BlobRef(request.bucket(), request.prefix()).getId(),
                     CloudErrorCodes.STORAGE_NOT_FOUND);

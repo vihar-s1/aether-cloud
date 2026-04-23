@@ -9,14 +9,20 @@ import static io.foundry.aether.nfs.internal.NFSUtils.toPath;
 import static io.foundry.aether.nfs.internal.NFSUtils.wrapIOException;
 
 import io.foundry.aether.core.CloudProvider;
+import io.foundry.aether.core.ListResponse;
 import io.foundry.aether.core.exception.*;
-import io.foundry.aether.core.internal.CollectionUtils;
 import io.foundry.aether.core.internal.FileUtils;
-import io.foundry.aether.core.storage.*;
+import io.foundry.aether.core.storage.BlobContent;
+import io.foundry.aether.core.storage.BlobMetadata;
+import io.foundry.aether.core.storage.BlobRef;
+import io.foundry.aether.core.storage.BlobStore;
+import io.foundry.aether.core.storage.ListBlobsRequest;
+import io.foundry.aether.core.storage.UploadBlobRequest;
 import io.foundry.aether.nfs.NFSCloudProvider;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.*;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.concurrent.NotThreadSafe;
@@ -69,26 +75,26 @@ public class NFSBlobStore implements BlobStore {
     }
 
     @Override
-    public ListBlobsResponse list(ListBlobsRequest request) {
-        Path path = Path.of(provider.basePath()).resolve(request.bucket());
-        if (!Files.exists(path)) {
-            return ListBlobsResponse.empty();
+    public ListResponse<BlobMetadata> list(ListBlobsRequest request) {
+        Path bucketPath = Path.of(provider.basePath()).resolve(request.bucket());
+        if (!Files.exists(bucketPath)) {
+            return ListResponse.empty();
         }
         try {
-            List<Path> files = FileUtils.filterFiles(path, p -> {
-                String relativePath = path.relativize(p).toString();
-                return relativePath.startsWith(request.prefix());
+            List<Path> files = FileUtils.filterFiles(bucketPath, p -> {
+                String relativePath = bucketPath.relativize(p).toString();
+                return request.prefix() == null || relativePath.startsWith(request.prefix());
             });
-            List<BlobMetadata> blobs = CollectionUtils.transformList(files, p -> {
-                String key = path.relativize(p).toString();
+            List<BlobMetadata> all = files.stream().sorted(Comparator.comparing(Path::toString)).map(p -> {
+                String key = bucketPath.relativize(p).toString();
                 try {
                     return new BlobMetadata(request.bucket(), key, Files.size(p), Files.probeContentType(p),
                             Files.getLastModifiedTime(p).toMillis(), Map.of());
                 } catch (IOException e) {
                     throw wrapIOException(e, "list", new BlobRef(request.bucket(), key));
                 }
-            });
-            return new ListBlobsResponse(blobs, null, false);
+            }).toList();
+            return ListResponse.ofPage(all, request);
         } catch (IOException e) {
             throw wrapIOException(e, "list", new BlobRef(request.bucket(), request.prefix()));
         }

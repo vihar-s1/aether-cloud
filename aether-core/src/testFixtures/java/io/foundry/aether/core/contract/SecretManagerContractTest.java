@@ -8,6 +8,7 @@ package io.foundry.aether.core.contract;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.foundry.aether.core.ListRequest;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
 import io.foundry.aether.core.secrets.SecretManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,11 +72,11 @@ public abstract class SecretManagerContractTest {
     void listSecrets_returnsAll() {
         manager.putSecret("a", "1");
         manager.putSecret("b", "2");
-        assertThat(manager.listSecrets()).hasSize(2);
+        assertThat(manager.listSecrets(ListRequest.first()).items()).hasSize(2);
     }
 
     @Test
     void listEmpty_returnsEmpty() {
-        assertThat(manager.listSecrets()).isEmpty();
+        assertThat(manager.listSecrets(ListRequest.first()).items()).isEmpty();
     }
 }

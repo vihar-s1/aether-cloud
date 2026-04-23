@@ -6,8 +6,9 @@
 package io.foundry.aether.core.secrets;
 
 import io.foundry.aether.core.CloudService;
+import io.foundry.aether.core.ListRequest;
+import io.foundry.aether.core.ListResponse;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
-import java.util.List;
 
 public interface SecretManager extends CloudService {
 
@@ -60,12 +61,14 @@ public interface SecretManager extends CloudService {
     void deleteSecret(String secretId);
 
     /**
-     * Returns all secrets. Note: the {@code versionId} field of each returned
+     * Returns one page of secrets. Pass {@link ListRequest#first()} to start from
+     * the beginning; use {@link ListResponse#nextCursor()} with a new request to
+     * advance to the next page. Note: the {@code versionId} field of each returned
      * {@link SecretMetadata} is {@code null} for cloud providers (AWS, GCP) because
      * list APIs do not return version information. Use {@link #getSecret(String)}
      * to obtain the current version.
      */
-    List<SecretMetadata> listSecrets();
+    ListResponse<SecretMetadata> listSecrets(ListRequest<SecretMetadata> request);
 
     /**
      * Creates the secret if it does not exist, or updates it if it does.

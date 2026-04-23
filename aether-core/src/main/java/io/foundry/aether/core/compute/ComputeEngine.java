@@ -6,8 +6,9 @@
 package io.foundry.aether.core.compute;
 
 import io.foundry.aether.core.CloudService;
+import io.foundry.aether.core.ListRequest;
+import io.foundry.aether.core.ListResponse;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
-import java.util.List;
 
 public interface ComputeEngine extends CloudService {
 
@@ -44,8 +45,10 @@ public interface ComputeEngine extends CloudService {
     InstanceInfo getInstance(String instanceId);
 
     /**
-     * Returns all instances regardless of state, including
-     * {@link InstanceState#TERMINATED} instances.
+     * Returns one page of instances regardless of state, including
+     * {@link InstanceState#TERMINATED} instances. Pass {@link ListRequest#first()}
+     * to start from the beginning; use {@link ListResponse#nextCursor()} with a new
+     * request to advance to the next page.
      */
-    List<InstanceInfo> listInstances();
+    ListResponse<InstanceInfo> listInstances(ListRequest<InstanceInfo> request);
 }

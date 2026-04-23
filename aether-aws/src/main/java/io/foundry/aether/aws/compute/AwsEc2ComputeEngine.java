@@ -12,6 +12,8 @@ import io.foundry.aether.core.compute.ComputeEngine;
 import io.foundry.aether.core.compute.InstanceConfig;
 import io.foundry.aether.core.compute.InstanceInfo;
 import io.foundry.aether.core.compute.InstanceState;
+import io.foundry.aether.core.ListRequest;
+import io.foundry.aether.core.ListResponse;
 import io.foundry.aether.core.exception.CloudErrorCodes;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
 import java.util.ArrayList;
@@ -86,12 +88,17 @@ public class AwsEc2ComputeEngine implements ComputeEngine {
     }
 
     @Override
-    public List<InstanceInfo> listInstances() {
+    public ListResponse<InstanceInfo> listInstances(ListRequest<InstanceInfo> request) {
         try {
-            DescribeInstancesResponse response = ec2Client
-                    .describeInstances(DescribeInstancesRequest.builder().build());
-            return response.reservations().stream().flatMap(reservation -> reservation.instances().stream())
-                    .map(this::_instanceToInfo).toList();
+            var reqBuilder = DescribeInstancesRequest.builder().nextToken(request.cursor());
+            if (request.limit() != null) {
+                reqBuilder.maxResults(request.limit());
+            }
+            DescribeInstancesResponse response = ec2Client.describeInstances(reqBuilder.build());
+            List<InstanceInfo> instances = response.reservations().stream()
+                    .flatMap(reservation -> reservation.instances().stream()).map(this::_instanceToInfo).toList();
+            String nextCursor = response.nextToken();
+            return new ListResponse<>(instances, nextCursor, nextCursor != null);
         } catch (AwsServiceException | SdkClientException e) {
             throw AwsUtils.wrapAwsException(e, "listInstances", INSTANCE, null, CloudErrorCodes.COMPUTE_NOT_FOUND);
         }

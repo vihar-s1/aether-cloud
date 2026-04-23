@@ -11,6 +11,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.foundry.aether.core.compute.ComputeEngine;
 import io.foundry.aether.core.compute.InstanceConfig;
 import io.foundry.aether.core.compute.InstanceState;
+import io.foundry.aether.core.ListRequest;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,7 +55,7 @@ public abstract class ComputeEngineContractTest {
     void listAfterCreatingMultiple_containsBothInstances() {
         var a = engine.createInstance(new InstanceConfig("a", "t3.micro", "ami-1", "us-east-1", Map.of()));
         var b = engine.createInstance(new InstanceConfig("b", "t3.micro", "ami-1", "us-east-1", Map.of()));
-        var ids = engine.listInstances().stream().map(i -> i.instanceId()).toList();
+        var ids = engine.listInstances(ListRequest.first()).items().stream().map(i -> i.instanceId()).toList();
         assertThat(ids).contains(a.instanceId(), b.instanceId());
     }
 

@@ -11,6 +11,8 @@ import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.exception.InvalidConfigurationException;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
 import io.foundry.aether.core.internal.JsonUtils;
+import io.foundry.aether.core.ListRequest;
+import io.foundry.aether.core.ListResponse;
 import io.foundry.aether.core.secrets.SecretManager;
 import io.foundry.aether.core.secrets.SecretMetadata;
 import io.foundry.aether.core.secrets.SecretValue;
@@ -21,6 +23,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -112,14 +115,15 @@ public class NFSSecretManager implements SecretManager {
     }
 
     @Override
-    public List<SecretMetadata> listSecrets() {
+    public ListResponse<SecretMetadata> listSecrets(ListRequest<SecretMetadata> request) {
         Path secretsBucketPath = Path.of(provider.basePath(), SECRETS_BUCKET);
         if (!Files.exists(secretsBucketPath)) {
-            return List.of();
+            return ListResponse.empty();
         }
         try {
-            return Files.walk(secretsBucketPath, 1).filter(path -> path.getFileName().toString().endsWith(".metadata"))
-                    .map(path -> {
+            List<SecretMetadata> all = Files.walk(secretsBucketPath, 1)
+                    .filter(path -> path.getFileName().toString().endsWith(".metadata"))
+                    .sorted(Comparator.comparing(path -> path.getFileName().toString())).map(path -> {
                         try (InputStream metadataStream = Files.newInputStream(path)) {
                             return JsonUtils.fromJson(metadataStream, SecretMetadata.class);
                         } catch (IOException e) {
@@ -127,6 +131,7 @@ public class NFSSecretManager implements SecretManager {
                                     new BlobRef(SECRETS_BUCKET, path.getFileName().toString()));
                         }
                     }).toList();
+            return ListResponse.ofPage(all, request);
         } catch (IOException e) {
             throw NFSUtils.wrapIOException(e, "listSecrets", new BlobRef(SECRETS_BUCKET, null));
         }
