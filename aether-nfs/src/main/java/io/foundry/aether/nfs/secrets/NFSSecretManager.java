@@ -5,6 +5,9 @@
 
 package io.foundry.aether.nfs.secrets;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.util.concurrent.Striped;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.ListRequest;
 import io.foundry.aether.core.ListResponse;
@@ -19,24 +22,56 @@ import io.foundry.aether.nfs.NFSCloudProvider;
 import io.foundry.aether.nfs.internal.IndexEntry;
 import io.foundry.aether.nfs.internal.NFSBlobIndex;
 import io.foundry.aether.nfs.internal.NFSUtils;
+import io.foundry.aether.nfs.internal.NFSUtils.ResolvedRef;
+import io.foundry.aether.nfs.internal.NfsIndexedFile;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.Base64;
 import java.util.List;
-import javax.annotation.concurrent.NotThreadSafe;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import javax.annotation.concurrent.ThreadSafe;
 
-/** Each secret is two files (value + metadata); reads and writes are non-atomic. Single-threaded use only. */
-@NotThreadSafe
+/**
+ * Each secret is a single {@code {base64url(secretId)}.secret} JSON file
+ * containing value + metadata, written atomically via temp-file-then-rename —
+ * readers always see a complete file. Filenames are Base64-URL-encoded secret
+ * IDs (no padding) — collision-free for any secret ID.
+ *
+ * <p>
+ * <b>Intra-JVM safety:</b> {@code Striped<Lock>} (reentrant) serialises
+ * concurrent mutations on the same secret; {@code secretsDirLock} serialises
+ * index updates for the secrets directory.
+ *
+ * <p>
+ * <b>Cross-JVM safety:</b> {@code createSecret} uses {@code ATOMIC_MOVE}
+ * without {@code REPLACE_EXISTING} (POSIX {@code rename(2)}) — fails atomically
+ * if the target already exists, no race window. {@code updateSecret},
+ * {@code rotate}, and {@code deleteSecret} are last-writer-wins across JVMs;
+ * individual file and index operations are each atomic.
+ */
+@ThreadSafe
 public class NFSSecretManager implements SecretManager {
 
     private static final String SECRETS_DIR = ".aether-nfs/secrets";
 
     private final NFSCloudProvider provider;
     private final NFSBlobIndex index;
+    private final Striped<Lock> fileLocks = Striped.lock(64);
+    private final ReentrantReadWriteLock secretsDirLock = new ReentrantReadWriteLock();
 
-    private record Entry(String value, SecretMetadata metadata) {
+    private record SecretFile(@JsonProperty("value") String value, @JsonProperty("metadata") SecretMetadata metadata) {
+
+        @JsonCreator
+        SecretFile {
+        }
     }
 
     public NFSSecretManager(NFSCloudProvider provider) {
@@ -51,7 +86,7 @@ public class NFSSecretManager implements SecretManager {
 
     @Override
     public SecretValue getSecret(String secretId) {
-        Entry entry = _readEntry(secretId);
+        SecretFile entry = _readSecretFile(secretId);
         if (entry == null) {
             throw new ResourceNotFoundException(provider.name(), "getSecret", SECRET, secretId);
         }
@@ -60,53 +95,103 @@ public class NFSSecretManager implements SecretManager {
 
     @Override
     public SecretMetadata createSecret(String secretId, String value) {
-        if (_findSecretMetadata(secretId) != null) {
-            throw new InvalidConfigurationException(provider.name(), "createSecret",
-                    "Secret already exists: " + secretId);
-        }
         String versionId = String.valueOf(System.nanoTime());
         long createdAt = System.currentTimeMillis();
         SecretMetadata metadata = new SecretMetadata(secretId, secretId, null, versionId, createdAt, 0L);
-        _upsertEntry(secretId, new Entry(value, metadata));
+
+        Lock fileWriteLock = _fileWriteLock(secretId);
+        fileWriteLock.lock();
+        try {
+            Files.createDirectories(_secretsRoot());
+            Path tmp = Files.createTempFile(_secretsRoot(), ".tmp-", null);
+            try {
+                Files.write(tmp, JsonUtils.toJson(new SecretFile(value, metadata)).getBytes(StandardCharsets.UTF_8));
+                Files.move(tmp, _secretPath(secretId), StandardCopyOption.ATOMIC_MOVE);
+            } catch (FileAlreadyExistsException e) {
+                Files.deleteIfExists(tmp);
+                throw new InvalidConfigurationException(provider.name(), "createSecret",
+                        "Secret already exists: " + secretId);
+            } catch (IOException e) {
+                Files.deleteIfExists(tmp);
+                throw NFSUtils.wrapIOException(e, "createSecret", new BlobRef(SECRETS_DIR, secretId));
+            }
+            secretsDirLock.writeLock().lock();
+            try {
+                index.addFile(_secretsRoot(), _secretsRoot(), _indexEntry(secretId));
+            } finally {
+                secretsDirLock.writeLock().unlock();
+            }
+        } catch (IOException e) {
+            throw NFSUtils.wrapIOException(e, "createSecret", new BlobRef(SECRETS_DIR, secretId));
+        } finally {
+            fileWriteLock.unlock();
+        }
         return metadata;
     }
 
     @Override
     public SecretMetadata updateSecret(String secretId, String value) {
-        SecretMetadata existing = _findSecretMetadata(secretId);
-        if (existing == null) {
-            throw new ResourceNotFoundException(provider.name(), "updateSecret", SECRET, secretId);
+        Lock lock = _fileWriteLock(secretId);
+        lock.lock();
+        try {
+            SecretFile existing = _readSecretFile(secretId);
+            if (existing == null) {
+                throw new ResourceNotFoundException(provider.name(), "updateSecret", SECRET, secretId);
+            }
+            String versionId = String.valueOf(System.nanoTime());
+            SecretMetadata newMetadata = existing.metadata().updateVersion(versionId);
+            // NfsIndexedFile.write() reacquires lock reentrantly
+            _resolveIndexedFile(secretId).write(_toInputStream(new SecretFile(value, newMetadata)), "application/json");
+            return newMetadata;
+        } catch (IOException e) {
+            throw NFSUtils.wrapIOException(e, "updateSecret", new BlobRef(SECRETS_DIR, secretId));
+        } finally {
+            lock.unlock();
         }
-        String versionId = String.valueOf(System.nanoTime());
-        SecretMetadata newMetadata = existing.updateVersion(versionId);
-        _upsertEntry(secretId, new Entry(value, newMetadata));
-        return newMetadata;
     }
 
     @Override
     public SecretValue rotate(String secretId) {
-        Entry entry = _readEntry(secretId);
-        if (entry == null) {
-            throw new ResourceNotFoundException(provider.name(), "rotate", SECRET, secretId);
+        Lock lock = _fileWriteLock(secretId);
+        lock.lock();
+        try {
+            SecretFile existing = _readSecretFile(secretId);
+            if (existing == null) {
+                throw new ResourceNotFoundException(provider.name(), "rotate", SECRET, secretId);
+            }
+            String versionId = String.valueOf(System.nanoTime());
+            SecretMetadata newMetadata = existing.metadata().updateVersion(versionId);
+            // NfsIndexedFile.write() reacquires lock reentrantly
+            _resolveIndexedFile(secretId).write(_toInputStream(new SecretFile(existing.value(), newMetadata)),
+                    "application/json");
+            return new SecretValue(secretId, existing.value(), versionId, existing.metadata().createdAtMs());
+        } catch (IOException e) {
+            throw NFSUtils.wrapIOException(e, "rotate", new BlobRef(SECRETS_DIR, secretId));
+        } finally {
+            lock.unlock();
         }
-        String versionId = String.valueOf(System.nanoTime());
-        SecretMetadata newMetadata = entry.metadata().updateVersion(versionId);
-        _upsertEntry(secretId, new Entry(entry.value(), newMetadata));
-        return new SecretValue(secretId, entry.value(), versionId, entry.metadata().createdAtMs());
     }
 
     @Override
     public void deleteSecret(String secretId) {
-        Entry existing = _readEntry(secretId);
-        if (existing == null) {
-            throw new ResourceNotFoundException(provider.name(), "deleteSecret", SECRET, secretId);
-        }
+        Lock fileWriteLock = _fileWriteLock(secretId);
+        fileWriteLock.lock();
         try {
-            Files.deleteIfExists(_valuePath(secretId));
-            Files.deleteIfExists(_metadataPath(secretId));
-            index.removeFile(_secretsRoot(), _secretsRoot(), _metadataFileName(secretId));
+            secretsDirLock.writeLock().lock();
+            try {
+                try {
+                    Files.delete(_secretPath(secretId));
+                } catch (NoSuchFileException e) {
+                    throw new ResourceNotFoundException(provider.name(), "deleteSecret", SECRET, secretId);
+                }
+                index.removeFile(_secretsRoot(), _secretsRoot(), _secretFileName(secretId));
+            } finally {
+                secretsDirLock.writeLock().unlock();
+            }
         } catch (IOException e) {
             throw NFSUtils.wrapIOException(e, "deleteSecret", new BlobRef(SECRETS_DIR, secretId));
+        } finally {
+            fileWriteLock.unlock();
         }
     }
 
@@ -117,22 +202,17 @@ public class NFSSecretManager implements SecretManager {
             return ListResponse.empty();
         }
         try {
-            // Read sorted entry names from the index — one index file read, no directory walk
             List<String> allNames = index.listDirectory(secretsRoot).stream()
-                    .filter(e -> !e.isDirectory() && e.name().endsWith(".metadata"))
-                    .map(IndexEntry::name)
-                    .toList();
+                    .filter(e -> !e.isDirectory() && e.name().endsWith(".secret")).map(IndexEntry::name).toList();
 
-            // Paginate names
-            long total = allNames.size();
-            long start = request.offset() != null && request.offset() > 0 ? request.offset() : 0;
-            long end = request.limit() != null && request.limit() > 0 ? request.limit() : total;
+            int total = allNames.size();
+            int start = _resolveStart(request, total);
+            int end = request.limit() != null ? Math.min(start + request.limit(), total) : total;
             boolean hasMore = end < total;
 
-            // Read only the page's metadata files
-            List<SecretMetadata> items = allNames.stream().skip(start).limit(end).map(name -> {
+            List<SecretMetadata> items = allNames.subList(start, end).stream().map(name -> {
                 try (InputStream stream = Files.newInputStream(secretsRoot.resolve(name))) {
-                    return JsonUtils.fromJson(stream, SecretMetadata.class);
+                    return JsonUtils.fromJson(stream, SecretFile.class).metadata();
                 } catch (IOException e) {
                     throw NFSUtils.wrapIOException(e, "listSecrets", new BlobRef(SECRETS_DIR, name));
                 }
@@ -144,48 +224,35 @@ public class NFSSecretManager implements SecretManager {
         }
     }
 
-    private Entry _readEntry(String secretId) {
-        Path valuePath = _valuePath(secretId);
-        Path metadataPath = _metadataPath(secretId);
-        if (!Files.exists(valuePath) || !Files.exists(metadataPath)) {
+    private NfsIndexedFile _resolveIndexedFile(String secretId) {
+        ResolvedRef resolved = new ResolvedRef(_secretsRoot(), _secretPath(secretId), _secretFileName(secretId));
+        return new NfsIndexedFile(resolved, index, _fileWriteLock(secretId), secretsDirLock);
+    }
+
+    private Lock _fileWriteLock(String secretId) {
+        return fileLocks.get(_secretPath(secretId).toString());
+    }
+
+    private SecretFile _readSecretFile(String secretId) {
+        Path path = _secretPath(secretId);
+        if (!Files.exists(path)) {
             return null;
         }
-        try (InputStream valueStream = Files.newInputStream(valuePath);
-                InputStream metadataStream = Files.newInputStream(metadataPath)) {
-            String value = new String(valueStream.readAllBytes(), StandardCharsets.UTF_8);
-            SecretMetadata metadata = JsonUtils.fromJson(metadataStream, SecretMetadata.class);
-            return new Entry(value, metadata);
+        try (InputStream stream = Files.newInputStream(path)) {
+            return JsonUtils.fromJson(stream, SecretFile.class);
         } catch (IOException e) {
-            throw NFSUtils.wrapIOException(e, "readEntry", new BlobRef(SECRETS_DIR, secretId));
+            throw NFSUtils.wrapIOException(e, "readSecretFile", new BlobRef(SECRETS_DIR, secretId));
         }
     }
 
-    private SecretMetadata _findSecretMetadata(String secretId) {
-        Path metadataPath = _metadataPath(secretId);
-        if (!Files.exists(metadataPath)) {
-            return null;
-        }
-        try (InputStream stream = Files.newInputStream(metadataPath)) {
-            return JsonUtils.fromJson(stream, SecretMetadata.class);
-        } catch (IOException e) {
-            throw NFSUtils.wrapIOException(e, "findSecretMetadata", new BlobRef(SECRETS_DIR, secretId));
-        }
+    private IndexEntry _indexEntry(String secretId) throws IOException {
+        Path path = _secretPath(secretId);
+        return IndexEntry.forFile(_secretFileName(secretId), Files.size(path), "application/json",
+                Files.getLastModifiedTime(path).toMillis());
     }
 
-    private void _upsertEntry(String secretId, Entry entry) {
-        Path valuePath = _valuePath(secretId);
-        Path metadataPath = _metadataPath(secretId);
-        try {
-            Files.createDirectories(valuePath.getParent());
-            NFSUtils.atomicWrite(valuePath, entry.value());
-            NFSUtils.atomicWrite(metadataPath, JsonUtils.toJson(entry.metadata()));
-            long size = Files.size(metadataPath);
-            long lastModified = Files.getLastModifiedTime(metadataPath).toMillis();
-            index.addFile(_secretsRoot(), _secretsRoot(),
-                    IndexEntry.forFile(_metadataFileName(secretId), size, "application/json", lastModified));
-        } catch (IOException e) {
-            throw NFSUtils.wrapIOException(e, "upsertEntry", new BlobRef(SECRETS_DIR, secretId));
-        }
+    private static InputStream _toInputStream(SecretFile file) {
+        return new ByteArrayInputStream(JsonUtils.toJson(file).getBytes(StandardCharsets.UTF_8));
     }
 
     private static int _resolveStart(ListRequest<SecretMetadata> request, int total) {
@@ -205,19 +272,12 @@ public class NFSSecretManager implements SecretManager {
         return Path.of(provider.basePath()).resolve(SECRETS_DIR);
     }
 
-    private Path _valuePath(String secretId) {
-        return _secretsRoot().resolve(sanitizeName(secretId) + ".value");
+    private Path _secretPath(String secretId) {
+        return _secretsRoot().resolve(_secretFileName(secretId));
     }
 
-    private Path _metadataPath(String secretId) {
-        return _secretsRoot().resolve(_metadataFileName(secretId));
-    }
-
-    private String _metadataFileName(String secretId) {
-        return sanitizeName(secretId) + ".metadata";
-    }
-
-    private String sanitizeName(String name) {
-        return name.replaceAll("[^a-zA-Z0-9]", "-");
+    private static String _secretFileName(String secretId) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(secretId.getBytes(StandardCharsets.UTF_8))
+                + ".secret";
     }
 }
