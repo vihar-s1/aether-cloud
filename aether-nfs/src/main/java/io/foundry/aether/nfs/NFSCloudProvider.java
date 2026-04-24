@@ -20,6 +20,7 @@ public class NFSCloudProvider implements CloudProvider {
 
     private final String alias;
     private final String basePath;
+    private final String indexSecret;
 
     private volatile ProviderStatus status = ProviderStatus.UNINITIALIZED;
     private volatile Throwable failureCause;
@@ -27,15 +28,21 @@ public class NFSCloudProvider implements CloudProvider {
     public NFSCloudProvider(String alias, String basePath) {
         this.alias = alias;
         this.basePath = basePath;
+        this.indexSecret = null;
     }
 
     public NFSCloudProvider(NfsProviderConfig config) {
         this.alias = config.name();
         this.basePath = config.rootPath().toString();
+        this.indexSecret = config.indexSecret().orElse(null);
     }
 
     public String basePath() {
         return basePath;
+    }
+
+    public Optional<String> indexSecret() {
+        return Optional.ofNullable(indexSecret);
     }
 
     @Override

@@ -5,14 +5,15 @@
 
 package io.foundry.aether.nfs.storage;
 
-import static io.foundry.aether.nfs.internal.NFSUtils.toPath;
+import static io.foundry.aether.nfs.internal.NFSUtils.bucketRoot;
+import static io.foundry.aether.nfs.internal.NFSUtils.resolve;
+import static io.foundry.aether.nfs.internal.NFSUtils.validateBucket;
 import static io.foundry.aether.nfs.internal.NFSUtils.wrapIOException;
 
 import com.google.common.util.concurrent.Striped;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.ListResponse;
-import io.foundry.aether.core.exception.*;
-import io.foundry.aether.core.internal.FileUtils;
+import io.foundry.aether.core.exception.ResourceNotFoundException;
 import io.foundry.aether.core.storage.BlobContent;
 import io.foundry.aether.core.storage.BlobMetadata;
 import io.foundry.aether.core.storage.BlobRef;
@@ -20,32 +21,62 @@ import io.foundry.aether.core.storage.BlobStore;
 import io.foundry.aether.core.storage.ListBlobsRequest;
 import io.foundry.aether.core.storage.UploadBlobRequest;
 import io.foundry.aether.nfs.NFSCloudProvider;
+import io.foundry.aether.nfs.internal.NFSBlobIndex;
+import io.foundry.aether.nfs.internal.NFSUtils.ResolvedRef;
+import io.foundry.aether.nfs.internal.NfsIndexedFile;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.*;
-import java.util.Comparator;
-import java.util.List;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
-import java.util.stream.Stream;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
- * Each write uses a temp-file-then-atomic-rename strategy so readers always
- * see a complete file. Per-key write locks (via a 64-stripe {@link Striped})
- * prevent concurrent uploads or deletes from racing on the same key. Reads do
- * not acquire locks — atomic writes ensure they observe either the complete old
- * or complete new content.
+ * NFS-backed blob store with a per-directory {@code .aether-index} that makes
+ * {@code list()} O(pageSize) I/O instead of O(bucket size).
+ *
+ * <p>
+ * <b>Write path:</b> every upload or delete goes through
+ * {@link NfsIndexedFile}, which atomically updates the blob file
+ * (temp-file-then-rename) and its index entry in the same critical section.
+ * Index updates can never be accidentally omitted by future methods.
+ *
+ * <p>
+ * <b>Read path:</b> {@code download}, {@code exists}, and {@code getMetadata}
+ * bypass the index and go directly to the filesystem. Atomic writes guarantee
+ * readers always see a complete file.
+ *
+ * <p>
+ * <b>Locking (single-JVM):</b> a {@link Striped} pool of 64
+ * {@link ReadWriteLock}s serialises concurrent writes to the same blob file. A
+ * {@link ConcurrentHashMap} of per-directory {@link ReentrantReadWriteLock}s
+ * serialises index updates within the JVM before the cross-JVM
+ * {@code FileChannel} lock is acquired. Lock ordering: file lock → directory
+ * lock → FileChannel lock.
+ *
+ * <p>
+ * <b>Pagination:</b> offset-based only. {@link ListResponse#nextCursor()} is
+ * always {@code null}. Cursor-based pagination is not supported.
+ *
+ * <p>
+ * <b>Bucket names</b> must be flat identifiers without path separators,
+ * matching the constraint enforced by S3, GCS, and Azure.
  */
 @ThreadSafe
 public class NFSBlobStore implements BlobStore {
 
     private final NFSCloudProvider provider;
-    private final Striped<ReadWriteLock> locks = Striped.readWriteLock(64);
+    private final Striped<ReadWriteLock> fileLocks = Striped.readWriteLock(64);
+    private final ConcurrentHashMap<String, ReentrantReadWriteLock> dirLocks = new ConcurrentHashMap<>();
+    private final NFSBlobIndex index;
 
     public NFSBlobStore(NFSCloudProvider provider) {
         this.provider = provider;
+        this.index = new NFSBlobIndex(provider.indexSecret().orElse(null));
     }
 
     @Override
@@ -55,17 +86,8 @@ public class NFSBlobStore implements BlobStore {
 
     @Override
     public BlobMetadata upload(UploadBlobRequest request) {
-        try (InputStream inputStream = request.data()) {
-            Path path = FileUtils.ensurePathExists(provider.basePath(), request.bucket(), request.key());
-            Lock lock = locks.get(path.toString()).writeLock();
-            lock.lock();
-            try {
-                _atomicWrite(path, inputStream);
-                return new BlobMetadata(request.bucket(), request.key(), Files.size(path), request.contentType(),
-                        Files.getLastModifiedTime(path).toMillis(), Map.of());
-            } finally {
-                lock.unlock();
-            }
+        try (InputStream data = request.data()) {
+            return _resolve(request.bucket(), request.key()).write(data, request.contentType());
         } catch (IOException e) {
             throw wrapIOException(e, "upload", new BlobRef(request.bucket(), request.key()));
         }
@@ -74,9 +96,9 @@ public class NFSBlobStore implements BlobStore {
     @Override
     public BlobContent download(BlobRef ref) {
         try {
-            Path path = toPath(provider, ref);
+            Path path = resolve(provider, ref).filePath();
             if (!Files.exists(path)) {
-                throw new ResourceNotFoundException(provider.name(), "download", BlobStore.BLOB, ref.getId());
+                throw new ResourceNotFoundException(provider.name(), "download", BLOB, ref.getId());
             }
             BlobMetadata metadata = new BlobMetadata(ref.bucket(), ref.key(), Files.size(path),
                     Files.probeContentType(path), Files.getLastModifiedTime(path).toMillis(), Map.of());
@@ -87,43 +109,23 @@ public class NFSBlobStore implements BlobStore {
     }
 
     /**
-     * Offset-based pagination only — cursor is ignored and {@link ListResponse#nextCursor()}
-     * is always {@code null}. The directory is walked in full to sort paths, but
-     * file metadata (size, mtime, content-type) is read only for the requested page.
+     * Lists blobs in a bucket. Offset-based pagination only — cursor is ignored and
+     * {@link ListResponse#nextCursor()} is always {@code null}.
+     *
+     * <p>
+     * Results are sourced from per-directory {@code .aether-index} files. If the
+     * bucket has pre-existing files that were never uploaded through this store,
+     * call {@link #rebuildIndex(String)} first.
      */
     @Override
     public ListResponse<BlobMetadata> list(ListBlobsRequest request) {
-        Path bucketPath = Path.of(provider.basePath()).resolve(request.bucket());
-        if (!Files.exists(bucketPath)) {
-            return ListResponse.empty();
-        }
-        int offset = request.offset() != null ? request.offset() : 0;
-        try (Stream<Path> walk = Files.walk(bucketPath)) {
-            Stream<Path> filtered = walk
-                    .filter(Files::isRegularFile)
-                    .filter(p -> {
-                        String rel = bucketPath.relativize(p).toString();
-                        return !rel.startsWith(".tmp-")
-                                && (request.prefix() == null || rel.startsWith(request.prefix()));
-                    })
-                    .sorted(Comparator.comparing(Path::toString))
-                    .skip(offset);
-
-            List<Path> page;
-            boolean hasMore;
-            if (request.limit() != null) {
-                page = filtered.limit(request.limit() + 1L).toList();
-                hasMore = page.size() > request.limit();
-                if (hasMore) page = page.subList(0, request.limit());
-            } else {
-                page = filtered.toList();
-                hasMore = false;
+        try {
+            Path root = bucketRoot(provider, request.bucket());
+            if (!Files.exists(root)) {
+                return ListResponse.empty();
             }
-
-            List<BlobMetadata> items = page.stream()
-                    .map(p -> _toMetadata(request.bucket(), bucketPath, p))
-                    .toList();
-            return new ListResponse<>(items, null, hasMore);
+            int offset = request.offset() != null ? request.offset() : 0;
+            return index.listRecursive(root, request.prefix(), offset, request.limit());
         } catch (IOException e) {
             throw wrapIOException(e, "list", new BlobRef(request.bucket(), request.prefix()));
         }
@@ -131,29 +133,24 @@ public class NFSBlobStore implements BlobStore {
 
     @Override
     public void delete(BlobRef ref) {
-        Path path = toPath(provider, ref);
-        Lock lock = locks.get(path.toString()).writeLock();
-        lock.lock();
         try {
-            Files.deleteIfExists(path);
+            _resolve(ref.bucket(), ref.key()).delete();
         } catch (IOException e) {
             throw wrapIOException(e, "delete", ref);
-        } finally {
-            lock.unlock();
         }
     }
 
     @Override
     public boolean exists(BlobRef ref) {
-        return Files.exists(toPath(provider, ref));
+        return Files.exists(resolve(provider, ref).filePath());
     }
 
     @Override
     public BlobMetadata getMetadata(BlobRef ref) {
         try {
-            Path path = toPath(provider, ref);
+            Path path = resolve(provider, ref).filePath();
             if (!Files.exists(path)) {
-                throw new ResourceNotFoundException(provider.name(), "getMetadata", BlobStore.BLOB, ref.getId());
+                throw new ResourceNotFoundException(provider.name(), "getMetadata", BLOB, ref.getId());
             }
             return new BlobMetadata(ref.bucket(), ref.key(), Files.size(path), Files.probeContentType(path),
                     Files.getLastModifiedTime(path).toMillis(), Map.of());
@@ -162,24 +159,25 @@ public class NFSBlobStore implements BlobStore {
         }
     }
 
-    private BlobMetadata _toMetadata(String bucket, Path bucketPath, Path p) {
-        String key = bucketPath.relativize(p).toString();
+    /**
+     * Rebuilds all {@code .aether-index} files in {@code bucket} from the live
+     * filesystem state. Use this to recover from a missing or corrupt index, or to
+     * index files that pre-date this store.
+     */
+    public void rebuildIndex(String bucket) {
+        validateBucket(bucket);
         try {
-            return new BlobMetadata(bucket, key, Files.size(p), Files.probeContentType(p),
-                    Files.getLastModifiedTime(p).toMillis(), Map.of());
+            index.rebuild(bucketRoot(provider, bucket));
         } catch (IOException e) {
-            throw wrapIOException(e, "list", new BlobRef(bucket, key));
+            throw wrapIOException(e, "rebuildIndex", new BlobRef(bucket, null));
         }
     }
 
-    private void _atomicWrite(Path target, InputStream data) throws IOException {
-        Path tmp = Files.createTempFile(target.getParent(), ".tmp-", null);
-        try {
-            Files.copy(data, tmp, StandardCopyOption.REPLACE_EXISTING);
-            Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
-            Files.deleteIfExists(tmp);
-            throw e;
-        }
+    private NfsIndexedFile _resolve(String bucket, String key) {
+        ResolvedRef resolved = resolve(provider, new BlobRef(bucket, key));
+        Lock fileWriteLock = fileLocks.get(resolved.filePath().toString()).writeLock();
+        ReadWriteLock dirLock = dirLocks.computeIfAbsent(resolved.dirPath().toString(),
+                k -> new ReentrantReadWriteLock());
+        return new NfsIndexedFile(resolved, index, fileWriteLock, dirLock);
     }
 }
