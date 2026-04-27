@@ -28,11 +28,9 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.locks.Lock;
@@ -103,18 +101,13 @@ public class NFSSecretManager implements SecretManager {
         fileWriteLock.lock();
         try {
             Files.createDirectories(_secretsRoot());
-            Path tmp = Files.createTempFile(_secretsRoot(), ".tmp-", null);
-            try {
-                Files.write(tmp, JsonUtils.toJson(new SecretFile(value, metadata)).getBytes(StandardCharsets.UTF_8));
-                Files.move(tmp, _secretPath(secretId), StandardCopyOption.ATOMIC_MOVE);
-            } catch (FileAlreadyExistsException e) {
-                Files.deleteIfExists(tmp);
+            // Existence check is under the fileWriteLock — safe intra-JVM.
+            // Cross-JVM: last-writer-wins semantics (same as update/delete).
+            if (Files.exists(_secretPath(secretId))) {
                 throw new InvalidConfigurationException(provider.name(), "createSecret",
                         "Secret already exists: " + secretId);
-            } catch (IOException e) {
-                Files.deleteIfExists(tmp);
-                throw NFSUtils.wrapIOException(e, "createSecret", new BlobRef(SECRETS_DIR, secretId));
             }
+            NFSUtils.atomicWrite(_secretPath(secretId), JsonUtils.toJson(new SecretFile(value, metadata)));
             secretsDirLock.writeLock().lock();
             try {
                 index.addFile(_secretsRoot(), _secretsRoot(), _indexEntry(secretId));

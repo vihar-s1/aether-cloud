@@ -52,7 +52,8 @@ public class GcpBlobStore implements BlobStore {
         BlobInfo blobInfo = BlobInfo.newBuilder(BlobId.of(request.bucket(), request.key()))
                 .setContentType(request.contentType()).build();
         try {
-            Blob blob = storage.createFrom(blobInfo, request.data());
+            byte[] bytes = request.data().readAllBytes();
+            Blob blob = storage.create(blobInfo, bytes);
             return _toMetadata(request.bucket(), request.key(), blob, request.contentType());
         } catch (StorageException e) {
             throw GcpUtils.wrapGcpException(e, "upload", BLOB, request.key(), CloudErrorCodes.STORAGE_NOT_FOUND);

@@ -30,9 +30,10 @@ class AetherJavaConventionPlugin : Plugin<Project> {
             }
         }
 
-        // Configure test suite
+        // Configure test suite — never use cached results so CI always runs tests fresh
         project.tasks.withType(Test::class.java) {
             useJUnitPlatform()
+            outputs.upToDateWhen { false }
         }
 
         // Create extension so modules can access versions

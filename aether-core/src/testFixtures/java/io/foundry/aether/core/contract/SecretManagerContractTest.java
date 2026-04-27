@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.foundry.aether.core.ListRequest;
+import io.foundry.aether.core.exception.InvalidConfigurationException;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
 import io.foundry.aether.core.secrets.SecretManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -78,5 +79,62 @@ public abstract class SecretManagerContractTest {
     @Test
     void listEmpty_returnsEmpty() {
         assertThat(manager.listSecrets(ListRequest.first()).items()).isEmpty();
+    }
+
+    @Test
+    void getNonexistent_throws() {
+        assertThatThrownBy(() -> manager.getSecret("missing")).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void createDuplicate_throws() {
+        manager.createSecret("key", "v1");
+        assertThatThrownBy(() -> manager.createSecret("key", "v2")).isInstanceOf(InvalidConfigurationException.class);
+    }
+
+    @Test
+    void updateNonexistent_throws() {
+        assertThatThrownBy(() -> manager.updateSecret("missing", "v1")).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    protected void deleteNonexistent_throws() {
+        assertThatThrownBy(() -> manager.deleteSecret("missing")).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void createSecret_metadataHasVersionAndTimestamp() {
+        long before = System.currentTimeMillis();
+        var meta = manager.createSecret("key", "value");
+        assertThat(meta.secretId()).isEqualTo("key");
+        assertThat(meta.versionId()).isNotBlank();
+        assertThat(meta.createdAtMs()).isGreaterThanOrEqualTo(before);
+    }
+
+    @Test
+    protected void updateSecret_preservesCreatedAt_bumpsVersion() {
+        var created = manager.createSecret("key", "v1");
+        var updated = manager.updateSecret("key", "v2");
+        assertThat(updated.createdAtMs()).isEqualTo(created.createdAtMs());
+        assertThat(updated.versionId()).isNotEqualTo(created.versionId());
+        assertThat(manager.getSecret("key").value()).isEqualTo("v2");
+    }
+
+    @Test
+    void listSecrets_withLimit_returnsPage() {
+        manager.putSecret("a", "1");
+        manager.putSecret("b", "2");
+        manager.putSecret("c", "3");
+        var page = manager.listSecrets(ListRequest.withOffset(0, 2));
+        assertThat(page.items()).hasSize(2);
+        assertThat(page.hasMore()).isTrue();
+    }
+
+    @Test
+    void secretId_withSpecialCharacters_createAndGet() {
+        manager.createSecret("db/prod/password", "secret");
+        var result = manager.getSecret("db/prod/password");
+        assertThat(result.value()).isEqualTo("secret");
+        assertThat(result.secretId()).isEqualTo("db/prod/password");
     }
 }

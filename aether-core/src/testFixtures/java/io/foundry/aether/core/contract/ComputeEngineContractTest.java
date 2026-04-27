@@ -13,6 +13,7 @@ import io.foundry.aether.core.compute.InstanceConfig;
 import io.foundry.aether.core.compute.InstanceState;
 import io.foundry.aether.core.ListRequest;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
+import java.util.HashSet;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,5 +68,59 @@ public abstract class ComputeEngineContractTest {
     @Test
     protected void terminateNonexistent_throws() {
         assertThatThrownBy(() -> engine.terminateInstance("no-such-id")).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void createInstance_initialStateIsNotTerminated() {
+        var info = engine.createInstance(new InstanceConfig("web", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        assertThat(info.state()).isNotEqualTo(InstanceState.TERMINATED);
+    }
+
+    @Test
+    void listInstances_afterTerminate_stillContainsInstance() {
+        var created = engine.createInstance(new InstanceConfig("web", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        engine.terminateInstance(created.instanceId());
+        var ids = engine.listInstances(ListRequest.first()).items().stream().map(i -> i.instanceId()).toList();
+        assertThat(ids).contains(created.instanceId());
+    }
+
+    @Test
+    void listInstances_withLimit_paginates() {
+        engine.createInstance(new InstanceConfig("a", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        engine.createInstance(new InstanceConfig("b", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        engine.createInstance(new InstanceConfig("c", "t3.micro", "ami-1", "us-east-1", Map.of()));
+
+        var page = engine.listInstances(ListRequest.withOffset(0, 2));
+        assertThat(page.items()).hasSize(2);
+        assertThat(page.hasMore()).isTrue();
+    }
+
+    @Test
+    void createInstance_withTags_tagsPreserved() {
+        var tags = Map.of("env", "prod", "team", "infra");
+        var created = engine.createInstance(new InstanceConfig("web", "t3.micro", "ami-1", "us-east-1", tags));
+        var fetched = engine.getInstance(created.instanceId());
+        assertThat(fetched.tags()).containsAllEntriesOf(tags);
+    }
+
+    @Test
+    void createMultiple_allHaveUniqueIds() {
+        var ids = new HashSet<String>();
+        for (int i = 0; i < 5; i++) {
+            ids.add(engine.createInstance(new InstanceConfig("inst-" + i, "t3.micro", "ami-1", "us-east-1", Map.of()))
+                    .instanceId());
+        }
+        assertThat(ids).hasSize(5);
+    }
+
+    @Test
+    void listInstances_deterministicOrder() {
+        engine.createInstance(new InstanceConfig("a", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        engine.createInstance(new InstanceConfig("b", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        engine.createInstance(new InstanceConfig("c", "t3.micro", "ami-1", "us-east-1", Map.of()));
+
+        var ids1 = engine.listInstances(ListRequest.first()).items().stream().map(i -> i.instanceId()).toList();
+        var ids2 = engine.listInstances(ListRequest.first()).items().stream().map(i -> i.instanceId()).toList();
+        assertThat(ids1).isEqualTo(ids2);
     }
 }

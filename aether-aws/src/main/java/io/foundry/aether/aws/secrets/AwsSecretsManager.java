@@ -9,6 +9,7 @@ import io.foundry.aether.aws.AwsCloudProvider;
 import io.foundry.aether.aws.internal.AwsUtils;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.exception.CloudErrorCodes;
+import io.foundry.aether.core.exception.InvalidConfigurationException;
 import io.foundry.aether.core.ListRequest;
 import io.foundry.aether.core.ListResponse;
 import io.foundry.aether.core.secrets.SecretManager;
@@ -21,6 +22,7 @@ import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.services.secretsmanager.model.CreateSecretRequest;
 import software.amazon.awssdk.services.secretsmanager.model.CreateSecretResponse;
 import software.amazon.awssdk.services.secretsmanager.model.DeleteSecretRequest;
+import software.amazon.awssdk.services.secretsmanager.model.ResourceExistsException;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueResponse;
 import software.amazon.awssdk.services.secretsmanager.model.PutSecretValueRequest;
@@ -62,6 +64,9 @@ public class AwsSecretsManager implements SecretManager {
             CreateSecretResponse response = secretsClient
                     .createSecret(CreateSecretRequest.builder().name(secretId).secretString(value).build());
             return new SecretMetadata(secretId, secretId, null, response.versionId(), System.currentTimeMillis(), 0L);
+        } catch (ResourceExistsException e) {
+            throw new InvalidConfigurationException(provider.name(), "createSecret",
+                    "Secret already exists: " + secretId, e);
         } catch (AwsServiceException | SdkClientException e) {
             throw AwsUtils.wrapAwsException(e, "createSecret", SECRET, secretId, CloudErrorCodes.SECRET_NOT_FOUND);
         }
