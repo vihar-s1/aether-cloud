@@ -17,6 +17,7 @@ public final class GcpProviderConfig implements ProviderConfig {
     private final String credentialsPath;
     private final String zone;
     private final String storageEndpoint;
+    private final String secretManagerEndpoint;
     private final boolean noCredentials;
 
     private GcpProviderConfig(Builder b) {
@@ -25,6 +26,7 @@ public final class GcpProviderConfig implements ProviderConfig {
         this.credentialsPath = b.credentialsPath;
         this.zone = b.zone;
         this.storageEndpoint = b.storageEndpoint;
+        this.secretManagerEndpoint = b.secretManagerEndpoint;
         this.noCredentials = b.noCredentials;
     }
 
@@ -66,6 +68,13 @@ public final class GcpProviderConfig implements ProviderConfig {
     }
 
     /**
+     * Custom gRPC endpoint for the Secret Manager client
+     */
+    public Optional<String> secretManagerEndpoint() {
+        return Optional.ofNullable(secretManagerEndpoint);
+    }
+
+    /**
      * When {@code true}, skip credential loading entirely. Use this for
      * unauthenticated local emulators (e.g. fake-gcs-server in development or CI)
      * that do not validate credentials. Defaults to {@code false}.
@@ -84,6 +93,7 @@ public final class GcpProviderConfig implements ProviderConfig {
         private String credentialsPath;
         private String zone;
         private String storageEndpoint;
+        private String secretManagerEndpoint;
         private boolean noCredentials = false;
 
         public Builder name(String name) {
@@ -108,6 +118,11 @@ public final class GcpProviderConfig implements ProviderConfig {
 
         public Builder storageEndpoint(String storageEndpoint) {
             this.storageEndpoint = storageEndpoint;
+            return this;
+        }
+
+        public Builder secretManagerEndpoint(String secretManagerEndpoint) {
+            this.secretManagerEndpoint = secretManagerEndpoint;
             return this;
         }
 

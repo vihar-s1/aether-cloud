@@ -7,7 +7,7 @@ package io.foundry.aether.nfs.secrets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.foundry.aether.core.exception.InvalidConfigurationException;
+import io.foundry.aether.core.exception.ResourceAlreadyExistsException;
 import io.foundry.aether.nfs.NFSCloudProvider;
 import io.foundry.aether.nfs.config.NfsProviderConfig;
 import java.io.IOException;
@@ -101,7 +101,7 @@ class NFSSecretManagerTest {
                 try {
                     manager.createSecret("shared-key", "value");
                     succeeded.incrementAndGet();
-                } catch (InvalidConfigurationException e) {
+                } catch (ResourceAlreadyExistsException e) {
                     failed.incrementAndGet();
                 }
             }));

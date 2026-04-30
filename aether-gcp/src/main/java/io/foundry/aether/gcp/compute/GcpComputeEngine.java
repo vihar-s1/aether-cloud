@@ -49,6 +49,14 @@ public class GcpComputeEngine implements ComputeEngine {
                         "Compute operations require 'zone' to be configured in GcpProviderConfig"));
     }
 
+    /** Package-private constructor for unit tests — bypasses provider initialization. */
+    GcpComputeEngine(GcpCloudProvider provider, InstancesClient instancesClient, String projectId, String zone) {
+        this.provider = provider;
+        this.instancesClient = instancesClient;
+        this.projectId = projectId;
+        this.zone = zone;
+    }
+
     @Override
     public CloudProvider provider() {
         return provider;

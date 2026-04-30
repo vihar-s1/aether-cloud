@@ -6,7 +6,7 @@
 package io.foundry.aether.inmemory.secrets;
 
 import io.foundry.aether.core.CloudProvider;
-import io.foundry.aether.core.exception.InvalidConfigurationException;
+import io.foundry.aether.core.exception.ResourceAlreadyExistsException;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
 import io.foundry.aether.core.ListRequest;
 import io.foundry.aether.core.ListResponse;
@@ -53,8 +53,7 @@ public class InMemorySecretManager implements SecretManager {
         SecretMetadata metadata = new SecretMetadata(secretId, secretId, null, versionId, createdAt, 0L);
         Entry previous = secrets.putIfAbsent(secretId, new Entry(value, metadata));
         if (previous != null) {
-            throw new InvalidConfigurationException(provider.name(), "createSecret",
-                    "Secret already exists: " + secretId);
+            throw new ResourceAlreadyExistsException(provider.name(), "createSecret", SECRET, secretId, null);
         }
         return metadata;
     }

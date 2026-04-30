@@ -11,7 +11,7 @@ import com.google.common.util.concurrent.Striped;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.ListRequest;
 import io.foundry.aether.core.ListResponse;
-import io.foundry.aether.core.exception.InvalidConfigurationException;
+import io.foundry.aether.core.exception.ResourceAlreadyExistsException;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
 import io.foundry.aether.core.internal.JsonUtils;
 import io.foundry.aether.core.secrets.SecretManager;
@@ -104,8 +104,7 @@ public class NFSSecretManager implements SecretManager {
             // Existence check is under the fileWriteLock — safe intra-JVM.
             // Cross-JVM: last-writer-wins semantics (same as update/delete).
             if (Files.exists(_secretPath(secretId))) {
-                throw new InvalidConfigurationException(provider.name(), "createSecret",
-                        "Secret already exists: " + secretId);
+                throw new ResourceAlreadyExistsException(provider.name(), "createSecret", SECRET, secretId, null);
             }
             NFSUtils.atomicWrite(_secretPath(secretId), JsonUtils.toJson(new SecretFile(value, metadata)));
             secretsDirLock.writeLock().lock();

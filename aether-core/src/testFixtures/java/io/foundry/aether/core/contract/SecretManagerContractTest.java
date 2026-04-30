@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.foundry.aether.core.ListRequest;
-import io.foundry.aether.core.exception.InvalidConfigurationException;
+import io.foundry.aether.core.exception.ResourceAlreadyExistsException;
 import io.foundry.aether.core.exception.ResourceNotFoundException;
 import io.foundry.aether.core.secrets.SecretManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -89,7 +89,7 @@ public abstract class SecretManagerContractTest {
     @Test
     void createDuplicate_throws() {
         manager.createSecret("key", "v1");
-        assertThatThrownBy(() -> manager.createSecret("key", "v2")).isInstanceOf(InvalidConfigurationException.class);
+        assertThatThrownBy(() -> manager.createSecret("key", "v2")).isInstanceOf(ResourceAlreadyExistsException.class);
     }
 
     @Test
@@ -131,7 +131,7 @@ public abstract class SecretManagerContractTest {
     }
 
     @Test
-    void secretId_withSpecialCharacters_createAndGet() {
+    protected void secretId_withSpecialCharacters_createAndGet() {
         manager.createSecret("db/prod/password", "secret");
         var result = manager.getSecret("db/prod/password");
         assertThat(result.value()).isEqualTo("secret");

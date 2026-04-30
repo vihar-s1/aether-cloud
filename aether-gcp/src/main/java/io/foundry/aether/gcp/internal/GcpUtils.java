@@ -11,6 +11,7 @@ import io.foundry.aether.core.exception.AuthenticationException;
 import io.foundry.aether.core.exception.CloudErrorCodes;
 import io.foundry.aether.core.exception.CloudException;
 import io.foundry.aether.core.exception.GenericCloudException;
+import io.foundry.aether.core.exception.ResourceAlreadyExistsException;
 import io.foundry.aether.core.exception.PermissionDeniedException;
 import io.foundry.aether.core.exception.ProviderUnavailableException;
 import io.foundry.aether.core.exception.QuotaExceededException;
@@ -45,6 +46,8 @@ public final class GcpUtils {
             return switch (apiEx.getStatusCode().getCode()) {
                 case NOT_FOUND -> new ResourceNotFoundException(GcpCloudProvider.PROVIDER_NAME, operation, resourceType,
                         resourceId, apiEx, defaultErrorCode);
+                case ALREADY_EXISTS -> new ResourceAlreadyExistsException(GcpCloudProvider.PROVIDER_NAME, operation, resourceType,
+                        resourceId, apiEx);
                 case PERMISSION_DENIED ->
                     new PermissionDeniedException(GcpCloudProvider.PROVIDER_NAME, operation, resourceType, apiEx);
                 case UNAUTHENTICATED ->

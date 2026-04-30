@@ -6,6 +6,9 @@
 package io.foundry.aether.gcp;
 
 import com.google.api.gax.core.FixedCredentialsProvider;
+import com.google.api.gax.core.NoCredentialsProvider;
+import com.google.api.gax.grpc.GrpcTransportChannel;
+import com.google.api.gax.rpc.FixedTransportChannelProvider;
 import com.google.auth.Credentials;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.cloud.NoCredentials;
@@ -19,6 +22,8 @@ import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.ProviderStatus;
 import io.foundry.aether.core.exception.InvalidConfigurationException;
 import io.foundry.aether.gcp.config.GcpProviderConfig;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -152,9 +157,24 @@ public class GcpCloudProvider implements CloudProvider {
 
     private SecretManagerServiceClient buildSecretManagerClient(Credentials credentials) {
         try {
-            SecretManagerServiceSettings settings = SecretManagerServiceSettings.newBuilder()
-                    .setCredentialsProvider(FixedCredentialsProvider.create(credentials)).build();
-            return SecretManagerServiceClient.create(settings);
+            if (config.secretManagerEndpoint().isPresent() && config.noCredentials()) {
+                // Emulator: plaintext gRPC — no TLS, no credentials
+                ManagedChannel channel = ManagedChannelBuilder
+                        .forTarget(config.secretManagerEndpoint().get())
+                        .usePlaintext()
+                        .build();
+                SecretManagerServiceSettings settings = SecretManagerServiceSettings.newBuilder()
+                        .setTransportChannelProvider(
+                                FixedTransportChannelProvider.create(GrpcTransportChannel.create(channel)))
+                        .setCredentialsProvider(NoCredentialsProvider.create())
+                        .build();
+                return SecretManagerServiceClient.create(settings);
+            }
+            // Standard TLS path — applies custom endpoint if set (e.g. VPC proxy), otherwise GCP default
+            SecretManagerServiceSettings.Builder builder = SecretManagerServiceSettings.newBuilder()
+                    .setCredentialsProvider(FixedCredentialsProvider.create(credentials));
+            config.secretManagerEndpoint().ifPresent(builder::setEndpoint);
+            return SecretManagerServiceClient.create(builder.build());
         } catch (IOException e) {
             throw new RuntimeException("Failed to build GCP Secret Manager client for provider '" + alias + "'", e);
         }
