@@ -36,8 +36,7 @@ class GcpSecretManagerIntegrationTest extends SecretManagerContractTest {
     @SuppressWarnings("resource")
     private static final GenericContainer<?> emulator = new GenericContainer<>(
             DockerImageName.parse("ghcr.io/blackwell-systems/gcp-secret-manager-emulator:latest"))
-            .withExposedPorts(GRPC_PORT)
-            .waitingFor(Wait.forListeningPort());
+            .withExposedPorts(GRPC_PORT).waitingFor(Wait.forListeningPort());
 
     private static SecretManagerServiceClient adminClient;
 
@@ -45,14 +44,10 @@ class GcpSecretManagerIntegrationTest extends SecretManagerContractTest {
     static void startEmulator() throws Exception {
         emulator.start();
         ManagedChannel channel = ManagedChannelBuilder
-                .forTarget(emulator.getHost() + ":" + emulator.getMappedPort(GRPC_PORT))
-                .usePlaintext()
-                .build();
+                .forTarget(emulator.getHost() + ":" + emulator.getMappedPort(GRPC_PORT)).usePlaintext().build();
         adminClient = SecretManagerServiceClient.create(SecretManagerServiceSettings.newBuilder()
-                .setTransportChannelProvider(
-                        FixedTransportChannelProvider.create(GrpcTransportChannel.create(channel)))
-                .setCredentialsProvider(NoCredentialsProvider.create())
-                .build());
+                .setTransportChannelProvider(FixedTransportChannelProvider.create(GrpcTransportChannel.create(channel)))
+                .setCredentialsProvider(NoCredentialsProvider.create()).build());
     }
 
     @AfterAll
@@ -64,12 +59,9 @@ class GcpSecretManagerIntegrationTest extends SecretManagerContractTest {
     @Override
     protected SecretManager createSecretManager() {
         clearSecrets();
-        GcpProviderConfig config = GcpProviderConfig.builder()
-                .name("test-gcp")
-                .projectId(PROJECT_ID)
-                .secretManagerEndpoint(emulator.getHost() + ":" + emulator.getMappedPort(GRPC_PORT))
-                .noCredentials(true)
-                .build();
+        GcpProviderConfig config = GcpProviderConfig.builder().name("test-gcp").projectId(PROJECT_ID)
+                .secretManagerEndpoint(emulator.getHost() + ":" + emulator.getMappedPort(GRPC_PORT)).noCredentials(true)
+                .enable(io.foundry.aether.core.secrets.SecretManager.class).build();
         GcpCloudProvider provider = new GcpCloudProvider(config);
         provider.initialize();
         return new GcpSecretManager(provider);

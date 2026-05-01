@@ -6,18 +6,26 @@
 package io.foundry.aether.aws.config;
 
 import io.foundry.aether.aws.AwsCloudProvider;
+import io.foundry.aether.core.CloudService;
+import io.foundry.aether.core.compute.ComputeEngine;
 import io.foundry.aether.core.config.ProviderConfig;
 import io.foundry.aether.core.exception.InvalidConfigurationException;
+import io.foundry.aether.core.secrets.SecretManager;
+import io.foundry.aether.core.storage.BlobStore;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.Optional;
+import java.util.Set;
 
-/** Configuration for an AWS provider instance. */
 public final class AwsProviderConfig implements ProviderConfig {
 
     private final String name;
     private final String accessKey;
     private final String secretKey;
     private final String region;
-    private final String endpoint; // nullable — uses AWS default when absent
+    private final String endpoint;
+    private final Set<Class<? extends CloudService>> enabledServices;
 
     private AwsProviderConfig(Builder b) {
         this.name = b.name;
@@ -25,6 +33,7 @@ public final class AwsProviderConfig implements ProviderConfig {
         this.secretKey = b.secretKey;
         this.region = b.region;
         this.endpoint = b.endpoint;
+        this.enabledServices = Collections.unmodifiableSet(new LinkedHashSet<>(b.enabledServices));
     }
 
     @Override
@@ -37,18 +46,15 @@ public final class AwsProviderConfig implements ProviderConfig {
         return AwsCloudProvider.PROVIDER_NAME;
     }
 
-    /**
-     * Returns the explicit access key, or empty to use the default credential chain
-     * (IAM/env).
-     */
+    @Override
+    public Set<Class<? extends CloudService>> enabledServices() {
+        return enabledServices;
+    }
+
     public Optional<String> accessKey() {
         return Optional.ofNullable(accessKey);
     }
 
-    /**
-     * Returns the explicit secret key, or empty to use the default credential chain
-     * (IAM/env).
-     */
     public Optional<String> secretKey() {
         return Optional.ofNullable(secretKey);
     }
@@ -57,7 +63,6 @@ public final class AwsProviderConfig implements ProviderConfig {
         return region;
     }
 
-    /** Returns the endpoint override URL, or empty to use the AWS default. */
     public Optional<String> endpoint() {
         return Optional.ofNullable(endpoint);
     }
@@ -73,6 +78,7 @@ public final class AwsProviderConfig implements ProviderConfig {
         private String secretKey;
         private String region;
         private String endpoint;
+        private final Set<Class<? extends CloudService>> enabledServices = new LinkedHashSet<>();
 
         public Builder name(String v) {
             this.name = v;
@@ -97,6 +103,16 @@ public final class AwsProviderConfig implements ProviderConfig {
         public Builder endpoint(String v) {
             this.endpoint = (v == null || v.isBlank()) ? null : v;
             return this;
+        }
+
+        @SafeVarargs
+        public final Builder enable(Class<? extends CloudService>... serviceTypes) {
+            enabledServices.addAll(Arrays.asList(serviceTypes));
+            return this;
+        }
+
+        public Builder enableAll() {
+            return enable(BlobStore.class, SecretManager.class, ComputeEngine.class);
         }
 
         public AwsProviderConfig build() {

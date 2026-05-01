@@ -20,7 +20,10 @@ import com.google.cloud.storage.Storage;
 import com.google.cloud.storage.StorageOptions;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.ProviderStatus;
+import io.foundry.aether.core.compute.ComputeEngine;
 import io.foundry.aether.core.exception.InvalidConfigurationException;
+import io.foundry.aether.core.secrets.SecretManager;
+import io.foundry.aether.core.storage.BlobStore;
 import io.foundry.aether.gcp.config.GcpProviderConfig;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
@@ -30,14 +33,6 @@ import java.io.InputStream;
 import java.util.Optional;
 import javax.annotation.concurrent.ThreadSafe;
 
-/**
- * GCP provider instance. Owns the SDK clients for a single configured GCP
- * project.
- *
- * <p>
- * Call {@link #initialize()} before using any service. Call {@link #shutdown()}
- * when done to close all clients.
- */
 @ThreadSafe
 public class GcpCloudProvider implements CloudProvider {
 
@@ -73,9 +68,15 @@ public class GcpCloudProvider implements CloudProvider {
         }
         try {
             Credentials credentials = resolveCredentials();
-            storageClient = buildStorageClient(credentials);
-            secretManagerClient = buildSecretManagerClient(credentials);
-            instancesClient = buildInstancesClient(credentials);
+            if (config.isEnabled(BlobStore.class)) {
+                storageClient = buildStorageClient(credentials);
+            }
+            if (config.isEnabled(SecretManager.class)) {
+                secretManagerClient = buildSecretManagerClient(credentials);
+            }
+            if (config.isEnabled(ComputeEngine.class)) {
+                instancesClient = buildInstancesClient(credentials);
+            }
             failureCause = null;
             status = ProviderStatus.RUNNING;
         } catch (Exception e) {
@@ -91,12 +92,15 @@ public class GcpCloudProvider implements CloudProvider {
             throw new IllegalStateException("Provider '" + alias + "' cannot be shut down from status: " + status);
         }
         try {
-            storageClient.close();
+            if (storageClient != null)
+                storageClient.close();
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-        secretManagerClient.close();
-        instancesClient.close();
+        if (secretManagerClient != null)
+            secretManagerClient.close();
+        if (instancesClient != null)
+            instancesClient.close();
         status = ProviderStatus.SHUTDOWN;
     }
 
@@ -116,16 +120,25 @@ public class GcpCloudProvider implements CloudProvider {
 
     public Storage storageClient() {
         checkRunning();
+        if (storageClient == null)
+            throw new InvalidConfigurationException(PROVIDER_NAME, "storageClient",
+                    "BlobStore was not enabled — call .enable(BlobStore.class) on the config builder");
         return storageClient;
     }
 
     public SecretManagerServiceClient secretManagerClient() {
         checkRunning();
+        if (secretManagerClient == null)
+            throw new InvalidConfigurationException(PROVIDER_NAME, "secretManagerClient",
+                    "SecretManager was not enabled — call .enable(SecretManager.class) on the config builder");
         return secretManagerClient;
     }
 
     public InstancesClient instancesClient() {
         checkRunning();
+        if (instancesClient == null)
+            throw new InvalidConfigurationException(PROVIDER_NAME, "instancesClient",
+                    "ComputeEngine was not enabled — call .enable(ComputeEngine.class) on the config builder");
         return instancesClient;
     }
 
@@ -158,19 +171,14 @@ public class GcpCloudProvider implements CloudProvider {
     private SecretManagerServiceClient buildSecretManagerClient(Credentials credentials) {
         try {
             if (config.secretManagerEndpoint().isPresent() && config.noCredentials()) {
-                // Emulator: plaintext gRPC — no TLS, no credentials
-                ManagedChannel channel = ManagedChannelBuilder
-                        .forTarget(config.secretManagerEndpoint().get())
-                        .usePlaintext()
-                        .build();
+                ManagedChannel channel = ManagedChannelBuilder.forTarget(config.secretManagerEndpoint().get())
+                        .usePlaintext().build();
                 SecretManagerServiceSettings settings = SecretManagerServiceSettings.newBuilder()
                         .setTransportChannelProvider(
                                 FixedTransportChannelProvider.create(GrpcTransportChannel.create(channel)))
-                        .setCredentialsProvider(NoCredentialsProvider.create())
-                        .build();
+                        .setCredentialsProvider(NoCredentialsProvider.create()).build();
                 return SecretManagerServiceClient.create(settings);
             }
-            // Standard TLS path — applies custom endpoint if set (e.g. VPC proxy), otherwise GCP default
             SecretManagerServiceSettings.Builder builder = SecretManagerServiceSettings.newBuilder()
                     .setCredentialsProvider(FixedCredentialsProvider.create(credentials));
             config.secretManagerEndpoint().ifPresent(builder::setEndpoint);

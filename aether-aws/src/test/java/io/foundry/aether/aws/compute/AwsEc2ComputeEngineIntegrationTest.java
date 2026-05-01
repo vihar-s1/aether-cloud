@@ -34,8 +34,7 @@ class AwsEc2ComputeEngineIntegrationTest extends ComputeEngineContractTest {
 
     @BeforeAll
     static void startLocalStack() {
-        localstack = new LocalStackContainer(DockerImageName.parse("localstack/localstack:4.0"))
-                .withServices("ec2");
+        localstack = new LocalStackContainer(DockerImageName.parse("localstack/localstack:4.0")).withServices("ec2");
         localstack.start();
         adminClient = Ec2Client.builder().endpointOverride(localstack.getEndpoint())
                 .credentialsProvider(StaticCredentialsProvider
@@ -55,7 +54,7 @@ class AwsEc2ComputeEngineIntegrationTest extends ComputeEngineContractTest {
         AwsCloudProvider provider = new AwsCloudProvider(AwsProviderConfig.builder().name("test-aws")
                 .accessKey(localstack.getAccessKey()).secretKey(localstack.getSecretKey())
                 .endpoint(localstack.getEndpoint().toString()).region(localstack.getRegion())
-                .build());
+                .enable(io.foundry.aether.core.compute.ComputeEngine.class).build());
         provider.initialize();
         return new AwsEc2ComputeEngine(provider);
     }

@@ -96,6 +96,7 @@ open class AetherLibsExtension {
 
     // Azure
     val azureCore = AetherLibs.AZURE_CORE
+    val nettyVersion = AetherVersions.NETTY
 
     // Extras
     val jacksonYaml = AetherLibs.JACKSON_YAML

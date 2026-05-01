@@ -36,8 +36,7 @@ class AwsS3BlobStoreIntegrationTest extends BlobStoreContractTest {
 
     @BeforeAll
     static void startLocalStack() {
-        localstack = new LocalStackContainer(DockerImageName.parse("localstack/localstack:4.0"))
-                .withServices("s3");
+        localstack = new LocalStackContainer(DockerImageName.parse("localstack/localstack:4.0")).withServices("s3");
         localstack.start();
         adminClient = S3Client.builder().endpointOverride(localstack.getEndpoint())
                 .credentialsProvider(StaticCredentialsProvider
@@ -57,10 +56,10 @@ class AwsS3BlobStoreIntegrationTest extends BlobStoreContractTest {
     @Override
     protected BlobStore createBlobStore() {
         clearBuckets();
-        AwsCloudProvider provider = new AwsCloudProvider(AwsProviderConfig.builder().name("test-aws")
-                .accessKey(localstack.getAccessKey()).secretKey(localstack.getSecretKey())
-                .endpoint(localstack.getEndpoint().toString()).region(localstack.getRegion())
-                .build());
+        AwsCloudProvider provider = new AwsCloudProvider(
+                AwsProviderConfig.builder().name("test-aws").accessKey(localstack.getAccessKey())
+                        .secretKey(localstack.getSecretKey()).endpoint(localstack.getEndpoint().toString())
+                        .region(localstack.getRegion()).enable(io.foundry.aether.core.storage.BlobStore.class).build());
         provider.initialize();
         return new AwsS3BlobStore(provider);
     }

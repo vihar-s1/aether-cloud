@@ -9,20 +9,16 @@ import io.foundry.aether.aws.config.AwsProviderConfig;
 import io.foundry.aether.aws.internal.AwsUtils;
 import io.foundry.aether.core.CloudProvider;
 import io.foundry.aether.core.ProviderStatus;
+import io.foundry.aether.core.compute.ComputeEngine;
+import io.foundry.aether.core.exception.InvalidConfigurationException;
+import io.foundry.aether.core.secrets.SecretManager;
+import io.foundry.aether.core.storage.BlobStore;
 import java.util.Optional;
 import javax.annotation.concurrent.ThreadSafe;
 import software.amazon.awssdk.services.ec2.Ec2Client;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 
-/**
- * AWS provider instance. Owns the SDK clients for a single configured AWS
- * account/region.
- *
- * <p>
- * Call {@link #initialize()} before using any service. Call {@link #shutdown()}
- * when done to close all clients.
- */
 @ThreadSafe
 public class AwsCloudProvider implements CloudProvider {
 
@@ -57,9 +53,15 @@ public class AwsCloudProvider implements CloudProvider {
                     "Provider '" + alias + "' has been shut down — create a new instance to reuse");
         }
         try {
-            s3Client = AwsUtils.applyCommonConfig(S3Client.builder(), config).forcePathStyle(true).build();
-            secretsManagerClient = AwsUtils.applyCommonConfig(SecretsManagerClient.builder(), config).build();
-            ec2Client = AwsUtils.applyCommonConfig(Ec2Client.builder(), config).build();
+            if (config.isEnabled(BlobStore.class)) {
+                s3Client = AwsUtils.applyCommonConfig(S3Client.builder(), config).forcePathStyle(true).build();
+            }
+            if (config.isEnabled(SecretManager.class)) {
+                secretsManagerClient = AwsUtils.applyCommonConfig(SecretsManagerClient.builder(), config).build();
+            }
+            if (config.isEnabled(ComputeEngine.class)) {
+                ec2Client = AwsUtils.applyCommonConfig(Ec2Client.builder(), config).build();
+            }
             failureCause = null;
             status = ProviderStatus.RUNNING;
         } catch (Exception e) {
@@ -74,9 +76,12 @@ public class AwsCloudProvider implements CloudProvider {
         if (status != ProviderStatus.RUNNING) {
             throw new IllegalStateException("Provider '" + alias + "' cannot be shut down from status: " + status);
         }
-        s3Client.close();
-        secretsManagerClient.close();
-        ec2Client.close();
+        if (s3Client != null)
+            s3Client.close();
+        if (secretsManagerClient != null)
+            secretsManagerClient.close();
+        if (ec2Client != null)
+            ec2Client.close();
         status = ProviderStatus.SHUTDOWN;
     }
 
@@ -90,18 +95,31 @@ public class AwsCloudProvider implements CloudProvider {
         return Optional.ofNullable(failureCause);
     }
 
+    public AwsProviderConfig config() {
+        return config;
+    }
+
     public S3Client s3Client() {
         checkRunning();
+        if (s3Client == null)
+            throw new InvalidConfigurationException(PROVIDER_NAME, "s3Client",
+                    "BlobStore was not enabled — call .enable(BlobStore.class) on the config builder");
         return s3Client;
     }
 
     public SecretsManagerClient secretsManagerClient() {
         checkRunning();
+        if (secretsManagerClient == null)
+            throw new InvalidConfigurationException(PROVIDER_NAME, "secretsManagerClient",
+                    "SecretManager was not enabled — call .enable(SecretManager.class) on the config builder");
         return secretsManagerClient;
     }
 
     public Ec2Client ec2Client() {
         checkRunning();
+        if (ec2Client == null)
+            throw new InvalidConfigurationException(PROVIDER_NAME, "ec2Client",
+                    "ComputeEngine was not enabled — call .enable(ComputeEngine.class) on the config builder");
         return ec2Client;
     }
 

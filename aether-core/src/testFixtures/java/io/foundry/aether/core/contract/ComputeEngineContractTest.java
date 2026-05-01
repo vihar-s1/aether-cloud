@@ -31,7 +31,7 @@ public abstract class ComputeEngineContractTest {
 
     @Test
     void createInstance_returnsInstanceWithId() {
-        var info = engine.createInstance(new InstanceConfig("web", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        var info = engine.createInstance(InstanceConfig.of("web", "t3.micro", "ami-1", "us-east-1", Map.of()));
         assertThat(info.state()).isNotNull();
         assertThat(info.name()).isEqualTo("web");
         assertThat(info.instanceId()).isNotBlank();
@@ -39,7 +39,7 @@ public abstract class ComputeEngineContractTest {
 
     @Test
     void getInstance_returnsSameInstanceId() {
-        var created = engine.createInstance(new InstanceConfig("web", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        var created = engine.createInstance(InstanceConfig.of("web", "t3.micro", "ami-1", "us-east-1", Map.of()));
         var fetched = engine.getInstance(created.instanceId());
         assertThat(fetched.instanceId()).isEqualTo(created.instanceId());
         assertThat(fetched.name()).isEqualTo(created.name());
@@ -47,15 +47,15 @@ public abstract class ComputeEngineContractTest {
 
     @Test
     void terminateThenGet_stateIsTerminated() {
-        var created = engine.createInstance(new InstanceConfig("web", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        var created = engine.createInstance(InstanceConfig.of("web", "t3.micro", "ami-1", "us-east-1", Map.of()));
         engine.terminateInstance(created.instanceId());
         assertThat(engine.getInstance(created.instanceId()).state()).isEqualTo(InstanceState.TERMINATED);
     }
 
     @Test
     void listAfterCreatingMultiple_containsBothInstances() {
-        var a = engine.createInstance(new InstanceConfig("a", "t3.micro", "ami-1", "us-east-1", Map.of()));
-        var b = engine.createInstance(new InstanceConfig("b", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        var a = engine.createInstance(InstanceConfig.of("a", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        var b = engine.createInstance(InstanceConfig.of("b", "t3.micro", "ami-1", "us-east-1", Map.of()));
         var ids = engine.listInstances(ListRequest.first()).items().stream().map(i -> i.instanceId()).toList();
         assertThat(ids).contains(a.instanceId(), b.instanceId());
     }
@@ -72,13 +72,13 @@ public abstract class ComputeEngineContractTest {
 
     @Test
     void createInstance_initialStateIsNotTerminated() {
-        var info = engine.createInstance(new InstanceConfig("web", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        var info = engine.createInstance(InstanceConfig.of("web", "t3.micro", "ami-1", "us-east-1", Map.of()));
         assertThat(info.state()).isNotEqualTo(InstanceState.TERMINATED);
     }
 
     @Test
     void listInstances_afterTerminate_stillContainsInstance() {
-        var created = engine.createInstance(new InstanceConfig("web", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        var created = engine.createInstance(InstanceConfig.of("web", "t3.micro", "ami-1", "us-east-1", Map.of()));
         engine.terminateInstance(created.instanceId());
         var ids = engine.listInstances(ListRequest.first()).items().stream().map(i -> i.instanceId()).toList();
         assertThat(ids).contains(created.instanceId());
@@ -86,9 +86,9 @@ public abstract class ComputeEngineContractTest {
 
     @Test
     void listInstances_withLimit_paginates() {
-        engine.createInstance(new InstanceConfig("a", "t3.micro", "ami-1", "us-east-1", Map.of()));
-        engine.createInstance(new InstanceConfig("b", "t3.micro", "ami-1", "us-east-1", Map.of()));
-        engine.createInstance(new InstanceConfig("c", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        engine.createInstance(InstanceConfig.of("a", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        engine.createInstance(InstanceConfig.of("b", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        engine.createInstance(InstanceConfig.of("c", "t3.micro", "ami-1", "us-east-1", Map.of()));
 
         var page = engine.listInstances(ListRequest.withOffset(0, 2));
         assertThat(page.items()).hasSize(2);
@@ -98,7 +98,7 @@ public abstract class ComputeEngineContractTest {
     @Test
     void createInstance_withTags_tagsPreserved() {
         var tags = Map.of("env", "prod", "team", "infra");
-        var created = engine.createInstance(new InstanceConfig("web", "t3.micro", "ami-1", "us-east-1", tags));
+        var created = engine.createInstance(InstanceConfig.of("web", "t3.micro", "ami-1", "us-east-1", tags));
         var fetched = engine.getInstance(created.instanceId());
         assertThat(fetched.tags()).containsAllEntriesOf(tags);
     }
@@ -107,7 +107,7 @@ public abstract class ComputeEngineContractTest {
     void createMultiple_allHaveUniqueIds() {
         var ids = new HashSet<String>();
         for (int i = 0; i < 5; i++) {
-            ids.add(engine.createInstance(new InstanceConfig("inst-" + i, "t3.micro", "ami-1", "us-east-1", Map.of()))
+            ids.add(engine.createInstance(InstanceConfig.of("inst-" + i, "t3.micro", "ami-1", "us-east-1", Map.of()))
                     .instanceId());
         }
         assertThat(ids).hasSize(5);
@@ -115,9 +115,9 @@ public abstract class ComputeEngineContractTest {
 
     @Test
     void listInstances_deterministicOrder() {
-        engine.createInstance(new InstanceConfig("a", "t3.micro", "ami-1", "us-east-1", Map.of()));
-        engine.createInstance(new InstanceConfig("b", "t3.micro", "ami-1", "us-east-1", Map.of()));
-        engine.createInstance(new InstanceConfig("c", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        engine.createInstance(InstanceConfig.of("a", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        engine.createInstance(InstanceConfig.of("b", "t3.micro", "ami-1", "us-east-1", Map.of()));
+        engine.createInstance(InstanceConfig.of("c", "t3.micro", "ami-1", "us-east-1", Map.of()));
 
         var ids1 = engine.listInstances(ListRequest.first()).items().stream().map(i -> i.instanceId()).toList();
         var ids2 = engine.listInstances(ListRequest.first()).items().stream().map(i -> i.instanceId()).toList();

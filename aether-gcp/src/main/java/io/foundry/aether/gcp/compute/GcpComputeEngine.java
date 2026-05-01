@@ -49,7 +49,10 @@ public class GcpComputeEngine implements ComputeEngine {
                         "Compute operations require 'zone' to be configured in GcpProviderConfig"));
     }
 
-    /** Package-private constructor for unit tests — bypasses provider initialization. */
+    /**
+     * Package-private constructor for unit tests — bypasses provider
+     * initialization.
+     */
     GcpComputeEngine(GcpCloudProvider provider, InstancesClient instancesClient, String projectId, String zone) {
         this.provider = provider;
         this.instancesClient = instancesClient;
@@ -98,8 +101,8 @@ public class GcpComputeEngine implements ComputeEngine {
                     CloudErrorCodes.COMPUTE_NOT_FOUND);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new GenericCloudException(GcpCloudProvider.PROVIDER_NAME, "terminateInstance", CloudErrorCodes.UNKNOWN,
-                    "Interrupted while waiting for instance to terminate", e);
+            throw new GenericCloudException(GcpCloudProvider.PROVIDER_NAME, "terminateInstance",
+                    CloudErrorCodes.UNKNOWN, "Interrupted while waiting for instance to terminate", e);
         }
     }
 
@@ -163,8 +166,10 @@ public class GcpComputeEngine implements ComputeEngine {
         return switch (gcpStatus.toUpperCase()) {
             case "PROVISIONING", "STAGING" -> InstanceState.PENDING;
             case "RUNNING" -> InstanceState.RUNNING;
-            case "STOPPING", "SUSPENDING" -> InstanceState.STOPPING;
-            case "STOPPED", "SUSPENDED" -> InstanceState.STOPPED;
+            case "STOPPING" -> InstanceState.STOPPING;
+            case "STOPPED" -> InstanceState.STOPPED;
+            case "SUSPENDING" -> InstanceState.SUSPENDING;
+            case "SUSPENDED" -> InstanceState.SUSPENDED;
             case "TERMINATED" -> InstanceState.TERMINATED;
             default -> InstanceState.UNKNOWN;
         };

@@ -26,7 +26,12 @@ public abstract class BlobStoreContractTest {
     @BeforeEach
     protected void setUp() {
         this.store = createBlobStore();
+        cleanUp();
     }
+
+    /** Override to delete test buckets before each test. Default is no-op. */
+    protected void cleanUp() {
+    };
 
     @Test
     void uploadThenDownload_contentMatches() {
@@ -221,7 +226,9 @@ public abstract class BlobStoreContractTest {
 
     @Test
     protected void metadata_hasLastModifiedTimestamp() {
-        long before = System.currentTimeMillis();
+        // Floor to second boundary — some providers (Azure) return second-precision
+        // timestamps
+        long before = (System.currentTimeMillis() / 1000) * 1000;
         store.upload(UploadBlobRequest.of("bkt", "file.txt", "data".getBytes(), "text/plain"));
 
         var meta = store.getMetadata(new BlobRef("bkt", "file.txt"));

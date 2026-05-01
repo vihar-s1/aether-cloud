@@ -69,8 +69,7 @@ class GcpComputeEngineTest {
         ApiException notFound = _apiException(StatusCode.Code.NOT_FOUND);
         when(instancesClient.get(PROJECT, ZONE, "missing")).thenThrow(notFound);
 
-        assertThatThrownBy(() -> engine.getInstance("missing"))
-                .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> engine.getInstance("missing")).isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
@@ -84,7 +83,7 @@ class GcpComputeEngineTest {
         when(instancesClient.get(PROJECT, ZONE, "app")).thenReturn(created);
 
         var info = engine.createInstance(
-                new InstanceConfig("app", "n1-standard-1", "projects/test/global/images/debian", ZONE, Map.of()));
+                InstanceConfig.of("app", "n1-standard-1", "projects/test/global/images/debian", ZONE, Map.of()));
 
         assertThat(info.name()).isEqualTo("app");
         assertThat(info.instanceId()).isEqualTo("99");
@@ -111,8 +110,7 @@ class GcpComputeEngineTest {
         when(future.get()).thenThrow(new ExecutionException(notFound));
         when(instancesClient.deleteAsync(eq(PROJECT), eq(ZONE), eq("missing"))).thenReturn(future);
 
-        assertThatThrownBy(() -> engine.terminateInstance("missing"))
-                .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> engine.terminateInstance("missing")).isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
@@ -121,9 +119,9 @@ class GcpComputeEngineTest {
         assertThat(_stateFor("PROVISIONING")).isEqualTo(InstanceState.PENDING);
         assertThat(_stateFor("STAGING")).isEqualTo(InstanceState.PENDING);
         assertThat(_stateFor("STOPPING")).isEqualTo(InstanceState.STOPPING);
-        assertThat(_stateFor("SUSPENDING")).isEqualTo(InstanceState.STOPPING);
+        assertThat(_stateFor("SUSPENDING")).isEqualTo(InstanceState.SUSPENDING);
         assertThat(_stateFor("STOPPED")).isEqualTo(InstanceState.STOPPED);
-        assertThat(_stateFor("SUSPENDED")).isEqualTo(InstanceState.STOPPED);
+        assertThat(_stateFor("SUSPENDED")).isEqualTo(InstanceState.SUSPENDED);
         assertThat(_stateFor("TERMINATED")).isEqualTo(InstanceState.TERMINATED);
         assertThat(_stateFor("UNDEFINED_STATE")).isEqualTo(InstanceState.UNKNOWN);
     }
@@ -155,7 +153,8 @@ class GcpComputeEngineTest {
     }
 
     private ApiException _apiException(StatusCode.Code code) {
-        // ApiException.getStatusCode() is final — can't be mocked. Use concrete subclass
+        // ApiException.getStatusCode() is final — can't be mocked. Use concrete
+        // subclass
         // with a mocked StatusCode interface (which is mockable).
         StatusCode statusCode = mock(StatusCode.class);
         when(statusCode.getCode()).thenReturn(code);

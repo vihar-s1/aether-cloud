@@ -5,10 +5,18 @@
 
 package io.foundry.aether.gcp.config;
 
+import io.foundry.aether.core.CloudService;
+import io.foundry.aether.core.compute.ComputeEngine;
 import io.foundry.aether.core.config.ProviderConfig;
 import io.foundry.aether.core.exception.InvalidConfigurationException;
+import io.foundry.aether.core.secrets.SecretManager;
+import io.foundry.aether.core.storage.BlobStore;
 import io.foundry.aether.gcp.GcpCloudProvider;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.Optional;
+import java.util.Set;
 
 public final class GcpProviderConfig implements ProviderConfig {
 
@@ -19,6 +27,7 @@ public final class GcpProviderConfig implements ProviderConfig {
     private final String storageEndpoint;
     private final String secretManagerEndpoint;
     private final boolean noCredentials;
+    private final Set<Class<? extends CloudService>> enabledServices;
 
     private GcpProviderConfig(Builder b) {
         this.name = b.name;
@@ -28,6 +37,7 @@ public final class GcpProviderConfig implements ProviderConfig {
         this.storageEndpoint = b.storageEndpoint;
         this.secretManagerEndpoint = b.secretManagerEndpoint;
         this.noCredentials = b.noCredentials;
+        this.enabledServices = Collections.unmodifiableSet(new LinkedHashSet<>(b.enabledServices));
     }
 
     @Override
@@ -40,45 +50,31 @@ public final class GcpProviderConfig implements ProviderConfig {
         return GcpCloudProvider.PROVIDER_NAME;
     }
 
+    @Override
+    public Set<Class<? extends CloudService>> enabledServices() {
+        return enabledServices;
+    }
+
     public String projectId() {
         return projectId;
     }
 
-    /**
-     * Path to a service account JSON key file. Absent means Application Default
-     * Credentials.
-     */
     public Optional<String> credentialsPath() {
         return Optional.ofNullable(credentialsPath);
     }
 
-    /** GCE zone for compute operations, e.g. {@code "us-central1-a"}. */
     public Optional<String> zone() {
         return Optional.ofNullable(zone);
     }
 
-    /**
-     * Custom host for the GCS client, e.g. {@code "http://localhost:4443"} when
-     * targeting a local emulator or alternative GCS-compatible endpoint.
-     * Credentials are still resolved via the normal chain regardless of this
-     * setting.
-     */
     public Optional<String> storageEndpoint() {
         return Optional.ofNullable(storageEndpoint);
     }
 
-    /**
-     * Custom gRPC endpoint for the Secret Manager client
-     */
     public Optional<String> secretManagerEndpoint() {
         return Optional.ofNullable(secretManagerEndpoint);
     }
 
-    /**
-     * When {@code true}, skip credential loading entirely. Use this for
-     * unauthenticated local emulators (e.g. fake-gcs-server in development or CI)
-     * that do not validate credentials. Defaults to {@code false}.
-     */
     public boolean noCredentials() {
         return noCredentials;
     }
@@ -88,6 +84,7 @@ public final class GcpProviderConfig implements ProviderConfig {
     }
 
     public static final class Builder {
+
         private String name;
         private String projectId;
         private String credentialsPath;
@@ -95,40 +92,51 @@ public final class GcpProviderConfig implements ProviderConfig {
         private String storageEndpoint;
         private String secretManagerEndpoint;
         private boolean noCredentials = false;
+        private final Set<Class<? extends CloudService>> enabledServices = new LinkedHashSet<>();
 
-        public Builder name(String name) {
-            this.name = name;
+        public Builder name(String v) {
+            this.name = v;
             return this;
         }
 
-        public Builder projectId(String projectId) {
-            this.projectId = projectId;
+        public Builder projectId(String v) {
+            this.projectId = v;
             return this;
         }
 
-        public Builder credentialsPath(String credentialsPath) {
-            this.credentialsPath = credentialsPath;
+        public Builder credentialsPath(String v) {
+            this.credentialsPath = v;
             return this;
         }
 
-        public Builder zone(String zone) {
-            this.zone = zone;
+        public Builder zone(String v) {
+            this.zone = v;
             return this;
         }
 
-        public Builder storageEndpoint(String storageEndpoint) {
-            this.storageEndpoint = storageEndpoint;
+        public Builder storageEndpoint(String v) {
+            this.storageEndpoint = v;
             return this;
         }
 
-        public Builder secretManagerEndpoint(String secretManagerEndpoint) {
-            this.secretManagerEndpoint = secretManagerEndpoint;
+        public Builder secretManagerEndpoint(String v) {
+            this.secretManagerEndpoint = v;
             return this;
         }
 
-        public Builder noCredentials(boolean noCredentials) {
-            this.noCredentials = noCredentials;
+        public Builder noCredentials(boolean v) {
+            this.noCredentials = v;
             return this;
+        }
+
+        @SafeVarargs
+        public final Builder enable(Class<? extends CloudService>... serviceTypes) {
+            enabledServices.addAll(Arrays.asList(serviceTypes));
+            return this;
+        }
+
+        public Builder enableAll() {
+            return enable(BlobStore.class, SecretManager.class, ComputeEngine.class);
         }
 
         public GcpProviderConfig build() {

@@ -5,18 +5,21 @@
 
 package io.foundry.aether.core.config;
 
+import io.foundry.aether.core.CloudService;
+import java.util.Set;
+
 /** Marker interface for provider configuration objects. */
 public interface ProviderConfig {
 
-    /**
-     * Logical alias assigned to this provider, e.g. {@code "prod-aws"},
-     * {@code "local-nfs"}.
-     */
     String name();
 
-    /**
-     * Provider type identifier, e.g. {@code "aws"}, {@code "nfs"},
-     * {@code "inmemory"}.
-     */
     String providerType();
+
+    default Set<Class<? extends CloudService>> enabledServices() {
+        return Set.of();
+    }
+
+    default boolean isEnabled(Class<? extends CloudService> serviceType) {
+        return enabledServices().contains(serviceType);
+    }
 }

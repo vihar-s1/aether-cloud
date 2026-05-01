@@ -56,7 +56,8 @@ class GcpBlobStoreIntegrationTest extends BlobStoreContractTest {
     protected BlobStore createBlobStore() {
         clearBuckets();
         GcpProviderConfig config = GcpProviderConfig.builder().name("test-gcp").projectId(PROJECT_ID)
-                .storageEndpoint(gcsHost()).noCredentials(true).build();
+                .storageEndpoint(gcsHost()).noCredentials(true).enable(io.foundry.aether.core.storage.BlobStore.class)
+                .build();
         GcpCloudProvider provider = new GcpCloudProvider(config);
         provider.initialize();
         return new GcpBlobStore(provider);

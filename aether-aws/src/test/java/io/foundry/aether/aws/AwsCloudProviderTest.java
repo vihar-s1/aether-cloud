@@ -19,7 +19,7 @@ class AwsCloudProviderTest {
     @DisplayName("name() returns alias from config")
     void name_returnsAlias() {
         AwsProviderConfig config = AwsProviderConfig.builder().name("prod-aws").accessKey("AKIA123").secretKey("secret")
-                .region("us-east-1").build();
+                .region("us-east-1").enableAll().build();
 
         var provider = new AwsCloudProvider(config);
         provider.initialize();
@@ -31,7 +31,7 @@ class AwsCloudProviderTest {
     @DisplayName("shutdown() closes clients without throwing")
     void shutdown_closesClients() {
         AwsProviderConfig config = AwsProviderConfig.builder().name("test-aws").accessKey("AKIA123").secretKey("secret")
-                .region("us-east-1").build();
+                .region("us-east-1").enableAll().build();
 
         var provider = new AwsCloudProvider(config);
         provider.initialize();
@@ -42,7 +42,7 @@ class AwsCloudProviderTest {
     @DisplayName("clients are non-null after initialize()")
     void clients_nonNull() {
         AwsProviderConfig config = AwsProviderConfig.builder().name("test-aws").accessKey("AKIA123").secretKey("secret")
-                .region("us-east-1").build();
+                .region("us-east-1").enableAll().build();
 
         var provider = new AwsCloudProvider(config);
         provider.initialize();
@@ -73,7 +73,8 @@ class AwsCloudProviderTest {
     @Test
     @DisplayName("no credentials builds successfully (IAM / default credential chain)")
     void noCredentials_iamMode_succeeds() {
-        AwsProviderConfig config = AwsProviderConfig.builder().name("test-aws").region("us-east-1").build();
+        AwsProviderConfig config = AwsProviderConfig.builder().name("test-aws").region("us-east-1")
+                .enable(io.foundry.aether.core.storage.BlobStore.class).build();
 
         var provider = new AwsCloudProvider(config);
         provider.initialize();

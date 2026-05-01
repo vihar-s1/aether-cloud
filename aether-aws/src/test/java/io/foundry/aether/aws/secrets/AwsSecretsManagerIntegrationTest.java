@@ -34,8 +34,7 @@ class AwsSecretsManagerIntegrationTest extends SecretManagerContractTest {
         localstack = new LocalStackContainer(DockerImageName.parse("localstack/localstack:4.0"))
                 .withServices("secretsmanager");
         localstack.start();
-        adminClient = SecretsManagerClient.builder()
-                .endpointOverride(localstack.getEndpoint())
+        adminClient = SecretsManagerClient.builder().endpointOverride(localstack.getEndpoint())
                 .credentialsProvider(StaticCredentialsProvider
                         .create(AwsBasicCredentials.create(localstack.getAccessKey(), localstack.getSecretKey())))
                 .region(Region.of(localstack.getRegion())).build();
@@ -55,8 +54,8 @@ class AwsSecretsManagerIntegrationTest extends SecretManagerContractTest {
         clearSecrets();
         AwsCloudProvider provider = new AwsCloudProvider(AwsProviderConfig.builder().name("test-aws")
                 .accessKey(localstack.getAccessKey()).secretKey(localstack.getSecretKey())
-                .endpoint(localstack.getEndpoint().toString())
-                .region(localstack.getRegion()).build());
+                .endpoint(localstack.getEndpoint().toString()).region(localstack.getRegion())
+                .enable(io.foundry.aether.core.secrets.SecretManager.class).build());
         provider.initialize();
         return new AwsSecretsManager(provider);
     }

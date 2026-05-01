@@ -6,10 +6,5 @@
 package io.foundry.aether.core.compute;
 
 public enum InstanceState {
-    PENDING,
-    RUNNING,
-    STOPPING,
-    STOPPED,
-    TERMINATED,
-    UNKNOWN
+    PENDING, RUNNING, STOPPING, STOPPED, DEALLOCATING, DEALLOCATED, SUSPENDING, SUSPENDED, TERMINATED, UNKNOWN
 }

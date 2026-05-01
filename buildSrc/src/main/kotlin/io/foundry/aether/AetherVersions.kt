@@ -12,6 +12,8 @@ object AetherVersions {
     const val GCP_LIBRARIES_BOM = "26.32.0"
     const val GCP_STORAGE = "2.30.0"
     const val AZURE_CORE = "1.45.0"
+    // Forced to patch CVE-2026-33871 (HTTP/2 CONTINUATION flood DoS via zero-byte frame bypass)
+    const val NETTY = "4.1.131.Final"
 
     // Annotations
     const val JSR305 = "3.0.2"
