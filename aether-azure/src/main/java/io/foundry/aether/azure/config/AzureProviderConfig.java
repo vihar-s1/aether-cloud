@@ -170,9 +170,9 @@ public final class AzureProviderConfig implements ProviderConfig {
         }
 
         public AzureProviderConfig build() {
-            if (storageAccount == null || storageAccount.isBlank()) {
+            if (enabledServices.contains(BlobStore.class) && (storageAccount == null || storageAccount.isBlank())) {
                 throw new InvalidConfigurationException("azure", "config",
-                        "Required field 'storage-account' is missing or blank");
+                        "'storage-account' is required when BlobStore is enabled");
             }
             return new AzureProviderConfig(this);
         }
